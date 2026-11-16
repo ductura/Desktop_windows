@@ -1,0 +1,8 @@
+{
+  "name": "@ductura/desktop-windows-ci-tests",
+  "private": true,
+  "description": "Only the Node test of the ci-ok workflow job (scripts/ci-ok.test.mjs); the app itself does not use Node",
+  "devDependencies": {
+    "yaml": "2.9.1"
+  }
+}

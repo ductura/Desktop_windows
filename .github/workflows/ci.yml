@@ -21,3 +21,53 @@ jobs:
         run: ./tests/functional/Install-And-Launch.ps1
       - uses: actions/upload-artifact@v4
         with: { name: Ductura-Setup-x64, path: dist/Ductura-Setup-x64.exe }
+
+  # Tests of ci-ok itself (scripts/ci-ok.test.mjs) on Linux: the repository
+  # has no other Node tests, and build-test stays as it is (DAN-885).
+  ci-ok-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install the YAML parser (package-lock.json, no scripts)
+        run: npm ci --ignore-scripts
+      - name: ci-ok tests
+        run: node --test scripts/ci-ok.test.mjs
+
+  # The one required status (DAN-885): green only when every job above
+  # succeeded; failure, cancelled, skipped or a missing result fails it.
+  # A plain job, so the check is named exactly ci-ok.
+  ci-ok:
+    name: ci-ok
+    if: ${{ always() }}
+    needs: [build-test, ci-ok-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every needed job succeeded
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          # ci-ok:begin
+          set -euo pipefail
+          if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<< "$NEEDS"; then
+            echo "::error::needs must be a non-empty JSON object"
+            exit 1
+          fi
+          problems="$(jq -r 'to_entries[] | ((.value | objects | .result) // "missing") as $r
+            | select($r != "success") | "job \(.key) result: \($r)"' <<< "$NEEDS")"
+          if [ -n "$problems" ]; then
+            while IFS= read -r line; do echo "::error::$line"; done <<< "$problems"
+            exit 1
+          fi
+          echo "ci-ok: $(jq length <<< "$NEEDS") job(s) passed"
+          # ci-ok:end
