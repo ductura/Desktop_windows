@@ -13,11 +13,10 @@ internal static class Program
         if (options.Smoke)
         {
             // A package with an invalid web address must not pass the functional test.
-            if (web is null) return 1;
             var version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
-            var line = $"Ductura OK {version}";
-            if (options.SmokeOutput is { } path) File.WriteAllText(path, line);
-            return 0;
+            var (exitCode, line) = Startup.Smoke(web, version);
+            if (line is not null && options.SmokeOutput is { } path) File.WriteAllText(path, line);
+            return exitCode;
         }
 
         ApplicationConfiguration.Initialize();
@@ -32,14 +31,13 @@ internal sealed class MainForm : Form
     {
         Text = Packaging.ProductName;
         Width = 960; Height = 640;
-        if (web is null)
+        // Fail closed: never open an address that did not pass the check.
+        if (Startup.LinkUrl(options, web) is not { } url)
         {
-            // Fail closed: never open an address that did not pass the check.
-            Controls.Add(new Label { Text = "Adresa Ducture u ovom paketu nije ispravna.", Dock = DockStyle.Top, Padding = new Padding(16) });
+            Controls.Add(new Label { Text = Startup.InvalidAddressText, Dock = DockStyle.Top, Padding = new Padding(16) });
             return;
         }
         var link = new LinkLabel { Text = "Otvori Ducturu", Dock = DockStyle.Top, Padding = new Padding(16) };
-        var url = Packaging.DocumentUrl(web, options.OpenDocumentId);
         link.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         Controls.Add(link);
         // Sljedeći korak: ugraditi editor (WebView2) umjesto poveznice.
