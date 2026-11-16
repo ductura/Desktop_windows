@@ -30,7 +30,7 @@ internal sealed class MainForm : Form
         Text = Packaging.ProductName;
         Width = 960; Height = 640;
         var link = new LinkLabel { Text = "Otvori Ducturu", Dock = DockStyle.Top, Padding = new Padding(16) };
-        var url = options.OpenDocumentId is { } id ? $"{Packaging.WebUrl}/app/web/#/doc/{id}" : Packaging.WebUrl;
+        var url = Packaging.DocumentUrl(options.OpenDocumentId);
         link.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         Controls.Add(link);
         // Sljedeći korak: ugraditi editor (WebView2) umjesto poveznice.

@@ -21,12 +21,46 @@ public class LaunchOptionsTests
         Assert.Equal(@"C:\temp\ok.txt", o.SmokeOutput);
     }
 
+    // The work id rule itself is in WorkIdTests; here the link: prefix, segment and URL.
     [Theory]
     [InlineData("ductura://doc/demo-1", "demo-1")]
     [InlineData("ductura://doc/demo-1/", "demo-1")]
+    [InlineData("DUCTURA://DOC/demo-1", "demo-1")]
+    [InlineData("ductura://doc/rad-%C4%8D", "rad-č")]
+    [InlineData("ductura://doc/..%2Fdoc", "../doc")]
     [InlineData("ductura://doc/", null)]
-    public void Poveznica_otvara_dokument(string arg, string? expected) =>
-        Assert.Equal(expected, LaunchOptions.Parse([arg]).OpenDocumentId);
+    [InlineData("ductura://doc//", null)]
+    [InlineData("ductura://doc/demo-1//", null)]
+    [InlineData("ductura://doc/../doc", null)]
+    [InlineData("ductura://doc/doc%00", null)]
+    [InlineData("ductura://doc/%ED%A0%80", null)]
+    [InlineData("ductura://doc/%C2%A0doc", null)]
+    [InlineData("ductura://doc/doc\t", null)]
+    public void Poveznica_otvara_samo_ispravan_ID_rada(string arg, string? expected)
+    {
+        var id = LaunchOptions.Parse([arg]).OpenDocumentId;
+        Assert.Equal(expected, id);
+        if (id is null) Assert.Equal(Packaging.WebUrl, Packaging.DocumentUrl(id));
+    }
+}
+
+public class DocumentUrlTests
+{
+    [Fact]
+    public void Neispravan_ID_ne_ulazi_u_URL_ni_kad_je_predan_izravno()
+    {
+        foreach (var id in new[] { null, "", " doc", "doc\0", "doc\uD800", new string('d', WorkId.Max + 1) })
+            Assert.Equal(Packaging.WebUrl, Packaging.DocumentUrl(id));
+    }
+
+    [Theory]
+    [InlineData("doc';DROP TABLE x;--", "doc%27%3BDROP%20TABLE%20x%3B--")]
+    [InlineData("../doc", "..%2Fdoc")]
+    [InlineData("%00", "%2500")]
+    [InlineData("a#b?c", "a%23b%3Fc")]
+    [InlineData(@"C:\doc", "C%3A%5Cdoc")]
+    public void Ispravan_ID_ulazi_u_URL_samo_escapiran(string id, string escaped) =>
+        Assert.Equal($"{Packaging.WebUrl}/app/web/#/doc/{escaped}", Packaging.DocumentUrl(id));
 }
 
 public class PackagingTests

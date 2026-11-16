@@ -14,11 +14,21 @@ public sealed record LaunchOptions(bool Smoke, string? SmokeOutput, string? Open
                 case "--smoke": smoke = true; break;
                 case "--smoke-out" when i + 1 < args.Count: output = args[++i]; smoke = true; break;
                 default:
-                    if (args[i].StartsWith("ductura://doc/", StringComparison.OrdinalIgnoreCase))
-                        doc = args[i]["ductura://doc/".Length..].TrimEnd('/');
+                    if (args[i].StartsWith(DocLinkPrefix, StringComparison.OrdinalIgnoreCase))
+                        doc = DocumentIdFromLink(args[i][DocLinkPrefix.Length..]);
                     break;
             }
         }
-        return new LaunchOptions(smoke, output, string.IsNullOrWhiteSpace(doc) ? null : doc);
+        return new LaunchOptions(smoke, output, doc);
+    }
+
+    private const string DocLinkPrefix = "ductura://doc/";
+
+    // One path segment after the prefix; one trailing '/' (Windows and browsers add it) is dropped.
+    // A raw '/' left over means more than one segment, so there is no work id (S-1H.1-c).
+    private static string? DocumentIdFromLink(string rest)
+    {
+        var segment = rest.EndsWith('/') ? rest[..^1] : rest;
+        return segment.Contains('/') ? null : WorkId.FromPathSegment(segment);
     }
 }
