@@ -3,11 +3,11 @@ namespace Ductura.Core;
 public static class Packaging
 {
     public const string ProductName = "Ductura";
-    public const string WebUrl = "https://ductura.org";
 
-    /// <summary>Adresa rada u web aplikaciji. ID ulazi samo ako prolazi pravilo ugovora, i to escapiran; inače početna adresa.</summary>
-    public static string DocumentUrl(string? workId) =>
-        WorkId.IsValid(workId) ? $"{WebUrl}/app/web/#/doc/{Uri.EscapeDataString(workId!)}" : WebUrl;
+    /// <summary>Adresa rada u web aplikaciji (adresa iz konfiguracije paketa, zadano <c>/app/</c>).
+    /// ID ulazi samo ako prolazi pravilo ugovora, i to escapiran; inače početna adresa.</summary>
+    public static string DocumentUrl(WebAddress web, string? workId) =>
+        WorkId.IsValid(workId) ? $"{web.Url}#/doc/{Uri.EscapeDataString(workId!)}" : web.Url;
 
     /// <summary>Naziv instalacijskog paketa koji nudi preloader (npr. Ductura-Setup-x64.exe).</summary>
     public static string InstallerFileName(string arch = "x64") =>

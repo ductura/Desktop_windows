@@ -4,5 +4,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <!-- Web address of the package (DAN-883). Only https and a host from the list pass;
+         V-0 sets the final domain here, never with /p: on the command line. -->
+    <DucturaWebUrl>https://ductura.org/app/</DucturaWebUrl>
+    <DucturaWebHosts>ductura.org</DucturaWebHosts>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="DucturaWebUrl" Value="$(DucturaWebUrl)" />
+    <AssemblyMetadata Include="DucturaWebHosts" Value="$(DucturaWebHosts)" />
+  </ItemGroup>
 </Project>

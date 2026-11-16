@@ -5,6 +5,8 @@ namespace Ductura.Core.Tests;
 
 public class LaunchOptionsTests
 {
+    private static readonly WebAddress Web = DocumentUrlTests.Web;
+
     [Fact]
     public void Prazni_argumenti_znace_obicno_pokretanje()
     {
@@ -40,17 +42,20 @@ public class LaunchOptionsTests
     {
         var id = LaunchOptions.Parse([arg]).OpenDocumentId;
         Assert.Equal(expected, id);
-        if (id is null) Assert.Equal(Packaging.WebUrl, Packaging.DocumentUrl(id));
+        if (id is null) Assert.Equal(Web.Url, Packaging.DocumentUrl(Web, id));
     }
 }
 
 public class DocumentUrlTests
 {
+    internal static readonly WebAddress Web =
+        WebAddress.TryCreate("https://ductura.org/app/", "ductura.org", out var web) ? web! : throw new InvalidOperationException();
+
     [Fact]
     public void Neispravan_ID_ne_ulazi_u_URL_ni_kad_je_predan_izravno()
     {
         foreach (var id in new[] { null, "", " doc", "doc\0", "doc\uD800", new string('d', WorkId.Max + 1) })
-            Assert.Equal(Packaging.WebUrl, Packaging.DocumentUrl(id));
+            Assert.Equal("https://ductura.org/app/", Packaging.DocumentUrl(Web, id));
     }
 
     [Theory]
@@ -59,8 +64,12 @@ public class DocumentUrlTests
     [InlineData("%00", "%2500")]
     [InlineData("a#b?c", "a%23b%3Fc")]
     [InlineData(@"C:\doc", "C%3A%5Cdoc")]
-    public void Ispravan_ID_ulazi_u_URL_samo_escapiran(string id, string escaped) =>
-        Assert.Equal($"{Packaging.WebUrl}/app/web/#/doc/{escaped}", Packaging.DocumentUrl(id));
+    public void Ispravan_ID_ulazi_u_URL_samo_escapiran(string id, string escaped)
+    {
+        var url = Packaging.DocumentUrl(Web, id);
+        Assert.Equal($"https://ductura.org/app/#/doc/{escaped}", url);
+        Assert.DoesNotContain("/app/web/", url);
+    }
 }
 
 public class PackagingTests
