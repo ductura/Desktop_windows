@@ -2,12 +2,14 @@ name: CI
 on:
   push: { branches: [main] }
   pull_request:
+permissions:
+  contents: read
 jobs:
   build-test:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with: { dotnet-version: 8.0.x }
       - name: Testovi pomoćnih funkcija
         run: dotnet test tests/Ductura.Core.Tests --configuration Release
@@ -19,7 +21,7 @@ jobs:
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DSourceDir=..\publish installer\Ductura.iss'
       - name: Funkcionalni test (instalacija i pokretanje iz izbornika Start)
         run: ./tests/functional/Install-And-Launch.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: Ductura-Setup-x64, path: dist/Ductura-Setup-x64.exe }
 
   # Tests of ci-ok itself (scripts/ci-ok.test.mjs) on Linux: the repository
@@ -41,13 +43,23 @@ jobs:
       - name: ci-ok tests
         run: node --test scripts/ci-ok.test.mjs
 
+  # Secret scan and dependency review are the shared ductura/.github
+  # workflows (DAN-879), called by full SHA; there is no tag yet.
+  secret-scan:
+    uses: ductura/.github/.github/workflows/secret-scan.yml@6f392fc2c87b1473266378d94895f1273087297c # main 2026-11-16
+
+  dependency-review:
+    if: ${{ github.event_name == 'pull_request' }}
+    uses: ductura/.github/.github/workflows/dependency-review.yml@6f392fc2c87b1473266378d94895f1273087297c # main 2026-11-16
+
   # The one required status (DAN-885): green only when every job above
-  # succeeded; failure, cancelled, skipped or a missing result fails it.
+  # succeeded; failure, cancelled, a missing result or a skip not listed in
+  # ALLOW_SKIPPED fails it. The block is a copy of ductura/.github ci-ok.yml.
   # A plain job, so the check is named exactly ci-ok.
   ci-ok:
     name: ci-ok
     if: ${{ always() }}
-    needs: [build-test, ci-ok-test]
+    needs: [build-test, ci-ok-test, secret-scan, dependency-review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -55,19 +67,29 @@ jobs:
       - name: Every needed job succeeded
         shell: bash
         env:
-          NEEDS: ${{ toJSON(needs) }}
+          RESULTS: ${{ toJSON(needs) }}
+          # dependency-review runs only on pull requests; there it must not be skipped.
+          ALLOW_SKIPPED: ${{ github.event_name != 'pull_request' && 'dependency-review' || '' }}
         run: |
           # ci-ok:begin
           set -euo pipefail
-          if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<< "$NEEDS"; then
-            echo "::error::needs must be a non-empty JSON object"
+          if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<< "$RESULTS"; then
+            echo "::error::results must be a non-empty JSON object; pass toJSON(needs) from a job with needs"
             exit 1
           fi
-          problems="$(jq -r 'to_entries[] | ((.value | objects | .result) // "missing") as $r
-            | select($r != "success") | "job \(.key) result: \($r)"' <<< "$NEEDS")"
+          allowed="$(tr -s ' \t\r\n' '\n' <<< "$ALLOW_SKIPPED" | sed '/^$/d' | jq -R . | jq -sc .)"
+          problems="$(jq -r --argjson allowed "$allowed" '
+            (($allowed - keys) | map("allow-skipped names a job that is not in needs: \(.)"))
+            + (to_entries | map(
+                ((.value | objects | .result) // "missing") as $r
+                | if $r == "success" then empty
+                  elif $r == "skipped" and (.key as $k | $allowed | index($k)) then empty
+                  else "job \(.key) result: \($r)" end))
+            | .[]' <<< "$RESULTS")"
           if [ -n "$problems" ]; then
             while IFS= read -r line; do echo "::error::$line"; done <<< "$problems"
             exit 1
           fi
-          echo "ci-ok: $(jq length <<< "$NEEDS") job(s) passed"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$RESULTS"
+          echo "ci-ok: $(jq length <<< "$RESULTS") job(s) passed"
           # ci-ok:end

@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parseDocument } from 'yaml';
 
@@ -55,8 +56,12 @@ const workflow = workflowOf(readFileSync(new URL('ci.yml', dir), 'utf8'));
 const ciOk = jobsOf(workflow)['ci-ok'];
 const script = ciOk?.steps?.find((s) => typeof s?.run === 'string' && s.run.includes('# ci-ok:begin'))?.run;
 
-const run = (value) => {
-  const r = spawnSync('bash', ['-c', script], { env: { PATH: process.env.PATH, NEEDS: value }, encoding: 'utf8' });
+// The block is a verbatim copy of ductura/.github ci-ok.yml (DAN-879); unset
+// ALLOW_SKIPPED stands for a workflow that forgot the variable.
+const run = (value, allow = '') => {
+  const env = { PATH: process.env.PATH, RESULTS: value };
+  if (allow !== null) env.ALLOW_SKIPPED = allow;
+  const r = spawnSync('bash', ['-c', script], { env, encoding: 'utf8' });
   return { code: r.status, out: r.stdout + r.stderr };
 };
 const needs = (o) => JSON.stringify(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { result: v, outputs: {} }])));
@@ -96,7 +101,129 @@ test('ci-ok names the failing job, not the good one', () => {
 });
 
 test('ci-ok explains input that is not a non-empty object', () => {
-  assert.match(run('null').out, /::error::needs must be a non-empty JSON object/);
+  assert.match(run('null').out, /::error::results must be a non-empty JSON object/);
+});
+
+// [name, results, ALLOW_SKIPPED, exit code]
+const skipCases = [
+  ['allowed skip', needs({ 'secret-scan': 'success', 'dependency-review': 'skipped' }), 'dependency-review', 0],
+  ['skip of a job not allowed', needs({ 'secret-scan': 'skipped', 'dependency-review': 'success' }), 'dependency-review', 1],
+  ['allowed job failed', needs({ 'dependency-review': 'failure' }), 'dependency-review', 1],
+  ['allowed job cancelled', needs({ 'dependency-review': 'cancelled' }), 'dependency-review', 1],
+  ['allow names a job outside needs', needs({ a: 'success' }), 'dependency-review', 1],
+  ['tab, CRLF and space separate names', needs({ a: 'skipped', b: 'skipped', c: 'skipped' }), 'a\tb\r\n c', 0],
+  ['NBSP does not separate names', needs({ a: 'skipped', b: 'skipped' }), 'a\u00a0b', 1],
+  ['DEL is not a separator', needs({ a: 'skipped' }), 'a\u007f', 1],
+  ['inherited key is not a job', needs({ a: 'skipped' }), 'toString __proto__', 1],
+  ['ALLOW_SKIPPED unset', needs({ a: 'success' }), null, 1],
+  ['ALLOW_SKIPPED unset and a skip', needs({ a: 'skipped' }), null, 1],
+];
+for (const [name, value, allow, code] of skipCases) {
+  test(`ci-ok allow-skipped ${code === 0 ? 'passes' : 'fails'}: ${name}`, () => {
+    const r = run(value, allow);
+    assert.equal(r.code, code, r.out);
+  });
+}
+
+// sha256 of the run block of ductura/.github .github/workflows/ci-ok.yml at
+// 6f392fc2c87b1473266378d94895f1273087297c (QA: git show that file and hash it).
+const CI_OK_BLOCK_SHA256 = '745e49eac5a5f871e51b02a08f29f0a101e644f6abe0cd1c5262de0b68adb8a2';
+test('ci-ok runs the exact block of the shared ci-ok.yml', () => {
+  assert.equal(createHash('sha256').update(script).digest('hex'), CI_OK_BLOCK_SHA256);
+});
+
+// Every uses value in a parsed workflow: job calls and steps.
+function usesOf(wf) {
+  const out = [];
+  for (const job of Object.values(jobsOf(wf))) {
+    if (Object.hasOwn(job, 'uses')) out.push(job.uses);
+    for (const step of Array.isArray(job.steps) ? job.steps : []) if (isMap(step) && Object.hasOwn(step, 'uses')) out.push(step.uses);
+  }
+  return out;
+}
+const SHA_REF = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.\/-]+@[0-9a-f]{40}$/;
+const pinned = (ref) => typeof ref === 'string' && (ref.startsWith('./') || /^docker:\/\/[^@\s]+@sha256:[0-9a-f]{64}$/.test(ref)
+  || (SHA_REF.test(ref) && (!ref.includes('/.github/workflows/') || /\.ya?ml@/.test(ref))));
+const unpinned = (text) => usesOf(workflowOf(text)).filter((u) => !pinned(u));
+
+const SHA = 'a'.repeat(40);
+const pinCases = [
+  ['tag', 'actions/checkout@v4'],
+  ['branch', 'actions/checkout@main'],
+  ['39 hex', `actions/checkout@${SHA.slice(1)}`],
+  ['41 hex', `actions/checkout@${SHA}a`],
+  ['upper-case hex', `actions/checkout@${SHA.toUpperCase()}`],
+  ['quoted trailing space', `"actions/checkout@${SHA} "`],
+  ['quoted trailing tab', `"actions/checkout@${SHA}\\t"`],
+  ['trailing NBSP', `"actions/checkout@${SHA}\\u00a0"`],
+  ['trailing DEL', `"actions/checkout@${SHA}\\u007f"`],
+  ['no owner', `"@${SHA}"`],
+  ['reusable workflow without a file', `o/r/.github/workflows/@${SHA}`],
+  ['docker without digest', 'docker://alpine:3'],
+  ['number', '1'],
+  ['list', `[o/r@${SHA}]`],
+  ['mapping', `{ o: r }`],
+];
+for (const [name, ref] of pinCases) {
+  test(`pin check refuses: ${name}`, () => {
+    assert.equal(unpinned(`on: push\njobs:\n  a:\n    steps:\n      - uses: ${ref}\n`).length, 1);
+  });
+}
+test('pin check follows aliases and allows local paths and full SHAs', () => {
+  assert.equal(unpinned(`on: push\nx: &u o/r@v1\njobs:\n  a: { uses: *u }\n`).length, 1);
+  assert.deepEqual(unpinned(`on: push\njobs:\n  a: { uses: "o/r/.github/workflows/w.yml@${SHA}" }\n  b: { steps: [{ uses: ./x }, { uses: o/r@${SHA} }] }\n`), []);
+});
+
+test('every workflow pins every uses to a full SHA', () => {
+  let count = 0;
+  for (const file of readdirSync(dir).filter((f) => /\.ya?ml$/i.test(f))) {
+    const text = readFileSync(new URL(file, dir), 'utf8');
+    count += usesOf(workflowOf(text)).length;
+    assert.deepEqual(unpinned(text), [], file);
+  }
+  assert.ok(count >= 6, `found ${count} uses`);
+});
+
+// The workflow grants contents: read and nothing more; no job widens it.
+function permissionProblems(wf) {
+  const p = wf.permissions;
+  const top = isMap(p) && Object.keys(p).length === 1 && Object.hasOwn(p, 'contents') && p.contents === 'read';
+  const jobs = Object.entries(jobsOf(wf)).filter(([, j]) => Object.hasOwn(j, 'permissions')
+    && !(isMap(j.permissions) && Object.values(j.permissions).every((v) => v === 'read' || v === 'none')));
+  return [...(top ? [] : ['workflow']), ...jobs.map(([n]) => n)];
+}
+const permCases = [
+  ['missing', 'on: push\njobs: { a: { runs-on: u } }\n', ['workflow']],
+  ['read-all', 'on: push\npermissions: read-all\njobs: { a: { runs-on: u } }\n', ['workflow']],
+  ['write-all', 'on: push\npermissions: write-all\njobs: { a: { runs-on: u } }\n', ['workflow']],
+  ['contents write', 'on: push\npermissions: { contents: write }\njobs: { a: { runs-on: u } }\n', ['workflow']],
+  ['extra key', 'on: push\npermissions: { contents: read, id-token: write }\njobs: { a: { runs-on: u } }\n', ['workflow']],
+  ['inherited keys', 'on: push\npermissions: { toString: read }\njobs: { a: { runs-on: u } }\n', ['workflow']],
+  ['job widens', 'on: push\npermissions: { contents: read }\njobs: { a: { permissions: { packages: write } } }\n', ['a']],
+  ['job write-all', 'on: push\npermissions: { contents: read }\njobs: { a: { permissions: write-all } }\n', ['a']],
+  ['read only', 'on: push\npermissions: { contents: read }\njobs: { a: { permissions: {} }, b: { permissions: { contents: read } } }\n', []],
+];
+for (const [name, text, found] of permCases) {
+  test(`permissions check ${found.length ? 'refuses' : 'allows'}: ${name}`, () => {
+    assert.deepEqual(permissionProblems(workflowOf(text)), found);
+  });
+}
+test('ci.yml grants contents: read only', () => {
+  assert.deepEqual(permissionProblems(workflow), []);
+});
+
+// Secret scan and dependency review are the shared ductura/.github workflows.
+const SHARED_SHA = '6f392fc2c87b1473266378d94895f1273087297c';
+test('secret-scan and dependency-review call ductura/.github at one SHA', () => {
+  const jobs = jobsOf(workflow);
+  for (const name of ['secret-scan', 'dependency-review']) {
+    const job = jobs[name];
+    assert.ok(isMap(job), `ci.yml has ${name}`);
+    assert.equal(job.uses, `ductura/.github/.github/workflows/${name}.yml@${SHARED_SHA}`);
+    for (const k of ['runs-on', 'steps', 'secrets']) assert.equal(job[k], undefined, `${name} has no ${k}`);
+    assert.ok(needsOf(ciOk).includes(name), `ci-ok needs ${name}`);
+  }
+  assert.ok(["github.event_name == 'pull_request'", "${{ github.event_name == 'pull_request' }}"].includes(jobs['dependency-review'].if));
 });
 
 // Workflows another PR could add: each must be refused by the trigger check.
@@ -155,7 +282,8 @@ test('ci-ok is a plain job named ci-ok that runs always over every other job', (
   assert.equal(ciOk.uses, undefined, 'ci-ok is not a reusable workflow call');
   assert.ok(['always()', '${{ always() }}'].includes(ciOk.if), `ci-ok if: ${ciOk.if}`);
   const step = ciOk.steps.find((s) => s.run === script);
-  assert.equal(step.env?.NEEDS, '${{ toJSON(needs) }}');
+  assert.equal(step.env?.RESULTS, '${{ toJSON(needs) }}');
+  assert.equal(step.env?.ALLOW_SKIPPED, "${{ github.event_name != 'pull_request' && 'dependency-review' || '' }}");
   const others = Object.keys(jobs).filter((j) => j !== 'ci-ok');
   assert.ok(others.length > 0);
   assert.deepEqual([...needsOf(ciOk)].sort(), others.sort());
