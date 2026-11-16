@@ -15,7 +15,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
 | `tests/functional` | Funkcionalni test instalacije |
-| `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`node --test`, u CI-ju na Linuxu) |
+| `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo tom testu (YAML parser `yaml`); aplikacija ne koristi Node. |
 | `installer/Ductura.iss` | Inno Setup skripta → `dist/Ductura-Setup-x64.exe` |
 
 ## Pokretanje
