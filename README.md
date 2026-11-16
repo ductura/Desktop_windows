@@ -19,6 +19,19 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 | `.github/workflows/ci.yml` | Jedini workflow za PR: `build-test`, `ci-ok-test`, skeniranje tajni i pregled ovisnosti iz `ductura/.github` (puni SHA) i obvezna zbirna provjera `ci-ok`. Dozvola je samo `contents: read`. |
 | `installer/Ductura.iss` | Inno Setup skripta → `dist/Ductura-Setup-x64.exe` |
 
+## Adresa weba
+
+Adresa web aplikacije nije upisana u kod. Čita se iz konfiguracije paketa u `Directory.Build.props`, a build je upisuje u sklop `Ductura.Core`.
+
+| Svojstvo | Zadano | Značenje |
+|---|---|---|
+| `DucturaWebUrl` | `https://ductura.org/app/` | Adresa s putem; rad se otvara na `<adresa>#/doc/<ID>` |
+| `DucturaWebHosts` | `ductura.org` | Dopušteni hostovi, odvojeni s `;` |
+
+`WebAddress` prihvaća samo kanonsku `https` adresu s hosta s popisa, bez porta, korisnika, upita i fragmenta, s putem koji završava s `/`. Ako adresa ne prolazi, aplikacija ne nudi poveznicu, a `--smoke` vraća 1.
+
+Konačnu domenu (V-0) upiši u ta dva retka, ne preko `/p:`. Adresa izdavača u `installer/Ductura.iss` (`AppPublisherURL`) mijenja se zasebno.
+
 ## Pokretanje
 
 ```powershell
