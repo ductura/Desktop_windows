@@ -51,7 +51,7 @@ Repo posjeduje i instalacijski paket, potpis paketa (ovisi o potpisu) i prvo pok
   - #4, DAN-883: adresa weba iz konfiguracije paketa.
 - Testovi:
   - xUnit u `tests/Ductura.Core.Tests`;
-  - funkcionalni test `tests/functional/Install-And-Launch.ps1`: tiha instalacija, prečac u izborniku Start i pokretanje s `--smoke-out`;
+  - funkcionalni test `tests/functional/Install-And-Launch.ps1`: tiha instalacija, prečac u izborniku Start i pokretanje s `--smoke-out`, zatim isto u mapi s razmakom i hrvatskim znakovima uz deinstalaciju bez ostataka (DAN-996);
   - `scripts/ci-ok.test.mjs` (Node, samo za `ci-ok`).
 - Paket: Inno Setup (`installer/Ductura.iss`) gradi `dist/Ductura-Setup-x64.exe`. Paket **nije potpisan**, pa SmartScreen upozorava korisnika.
 - Adresa weba `https://ductura.org/app/` je zadana vrijednost dok se ne odluči V-0 (domena).

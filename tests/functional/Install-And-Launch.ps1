@@ -5,6 +5,52 @@ $ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path $Installer)) { throw "Paket ne postoji: $Installer" }
 
+# Passes 2 and 3 (DAN-996) install into C:\Ductura and C:\Ductura test; they must not exist beforehand.
+foreach ($d in 'C:\Ductura', 'C:\Ductura test') { if (Test-Path -LiteralPath $d) { throw "Mapa već postoji: $d" } }
+$appKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{7B0E3D52-5C1A-4A55-9C8B-1D3C0D6F2A11}_is1'
+
+# Arguments go as one string: Start-Process neither adds nor removes quotes, so a missing quote stays missing.
+function Install-Ductura([string]$Arguments) {
+    Write-Host "Instalacija: $Arguments"
+    $p = Start-Process $downloaded -ArgumentList $Arguments -PassThru
+    $null = $p.Handle
+    if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "Instalacija nije završila u 300 s" }
+    return $p.ExitCode
+}
+
+# Per-user install in $Dir: the exe, the uninstall key (HKCU only) and the Start menu shortcut all point there.
+function Assert-InstalledAt([string]$Dir) {
+    $exe = Join-Path $Dir 'Ductura.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { throw "Ductura.exe nije u mapi instalacije: $exe" }
+    $key = Get-ItemProperty -LiteralPath "HKCU:\$appKey" -ErrorAction SilentlyContinue
+    if (-not $key -or $key.InstallLocation.TrimEnd('\') -ine $Dir.TrimEnd('\')) {
+        throw "Ključ deinstalacije ne pokazuje na $Dir (InstallLocation: $($key.InstallLocation))"
+    }
+    foreach ($k in "HKLM:\$appKey", "HKLM:\$($appKey -replace '^Software', 'Software\WOW6432Node')") {
+        if (Test-Path -LiteralPath $k) { throw "Instalacija za trenutnog korisnika upisala je ključ u HKLM: $k" }
+    }
+    $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'Ductura\Ductura.lnk'
+    if (-not (Test-Path -LiteralPath $lnk)) { throw "Nema prečaca u izborniku Start: $lnk" }
+    # WScript.Shell returns TargetPath through the ANSI code page (đ, č, ć become d, c, c); Shell.Application reads Unicode.
+    $target = (New-Object -ComObject Shell.Application).NameSpace((Split-Path $lnk)).ParseName('Ductura.lnk').GetLink.Path
+    if ($target -ine $exe) { throw "Prečac pokazuje na $target, a ne na $exe" }
+    return $exe
+}
+
+# The uninstaller hands off to a copy in TEMP and returns at once, so the leftovers are polled for up to 120 s.
+function Uninstall-Ductura {
+    $dir = (Get-ItemProperty -LiteralPath "HKCU:\$appKey" -ErrorAction Stop).InstallLocation.TrimEnd('\')
+    Write-Host "Deinstalacija: $dir"
+    $null = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -PassThru
+    $watch = "HKCU:\$appKey", $dir, (Join-Path ([Environment]::GetFolderPath('Programs')) 'Ductura'), 'HKCU:\Software\Classes\ductura'
+    $deadline = [DateTime]::UtcNow.AddSeconds(120)
+    do {
+        Start-Sleep -Seconds 2
+        $left = @($watch | Where-Object { Test-Path -LiteralPath $_ })
+    } while ($left.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline)
+    if ($left.Count -gt 0) { throw "Deinstalacija je ostavila: $($left -join ', ')" }
+}
+
 # 1. "Preuzimanje": kopija paketa u mapu Preuzimanja kao što bi to napravio preglednik.
 $downloads = Join-Path $env:TEMP 'ductura-download'
 New-Item -ItemType Directory -Force $downloads | Out-Null
@@ -62,3 +108,36 @@ Invoke-ShellSmoke (Join-Path $invalid 'Ductura.exe') 1 'Ductura poruka'
 if (Test-Path $data) { throw "S neispravnom adresom nastala je podatkovna mapa WebView2: $data" }
 
 Write-Host "OK: instalirano, prečac postoji, pokretanje radi ($line), WebView2 otvara $webUrl, neispravna adresa daje poruku"
+
+# 7. Pass 1 is removed so that every later pass starts clean.
+Uninstall-Ductura
+
+# 8. Folder with a space and Croatian letters (DAN-996), built from code points so the file encoding cannot change it.
+$dir = 'C:\Ductura test\' + (-join [char[]](0x160, 0x111, 0x10D, 0x107, 0x17E)) + ' mapa'
+$base = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER'
+
+# 8a. Negative first: without quotes Inno reads /DIR=C:\Ductura and ignores the rest. Only that exact outcome is
+#     accepted, and the same check as in 8b must reject it.
+$code = Install-Ductura "$base /DIR=$dir"
+if ($code -ne 0 -or (Test-Path -LiteralPath 'C:\Ductura test') -or -not (Test-Path -LiteralPath 'C:\Ductura\Ductura.exe')) {
+    throw "Neočekivan ishod negativnog prolaza (kod $code): očekivana je instalacija u C:\Ductura"
+}
+$caught = $false
+try { $null = Assert-InstalledAt $dir } catch { $caught = $true; Write-Host "Pokvaren navodnik otkriven: $_" }
+if (-not $caught) { throw "Pokvaren navodnik u putanji nije otkriven" }
+Uninstall-Ductura
+
+# 8b. Quoted /DIR: install, shortcut, --smoke-out from that folder, then uninstall without leftovers.
+$code = Install-Ductura "$base /DIR=`"$dir`""
+if ($code -ne 0) { throw "Instalacija u $dir nije uspjela (kod $code)" }
+$exe = Assert-InstalledAt $dir
+$out2 = Join-Path $env:TEMP 'ductura-smoke-2.txt'
+Remove-Item $out2 -ErrorAction SilentlyContinue
+$run = Start-Process $exe -ArgumentList "--smoke-out `"$out2`"" -Wait -PassThru
+if ($run.ExitCode -ne 0) { throw "Ductura se nije pokrenula iz $dir (kod $($run.ExitCode))" }
+$line2 = Get-Content $out2 -Raw
+if ($line2 -notmatch '^Ductura OK') { throw "Neočekivan izlaz iz ${dir}: $line2" }
+Uninstall-Ductura
+Remove-Item -LiteralPath 'C:\Ductura test' -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host "OK: $dir instalirano, prečac pokazuje onamo, pokretanje radi ($line2), deinstalacija bez ostataka; pokvaren navodnik je otkriven"
