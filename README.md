@@ -40,7 +40,7 @@ Prozor s provjerenom adresom stvara kontrolu WebView2 i otvara adresu iz `WebAdd
 
 | Nalaz | Stanje |
 |---|---|
-| Paket | `Microsoft.Web.WebView2` 1.0.3912.50 dodaje oko 0,9 MB nekomprimiranih datoteka: `Microsoft.Web.WebView2.Core.dll` 650 KB, `WebView2Loader.dll` (win-x64) 159 KB, `Microsoft.Web.WebView2.WinForms.dll` 39 KB i `Microsoft.Web.WebView2.Wpf.dll` 83 KB. Najveći dio paketa i dalje je samostalni .NET 8. Ukupnu veličinu instalacijskog paketa pokazuje artefakt `Ductura-Setup-x64` u CI-ju. |
+| Paket | `Microsoft.Web.WebView2` 1.0.3912.50 dodaje oko 0,9 MB nekomprimiranih datoteka: `Microsoft.Web.WebView2.Core.dll` 650 KB, `WebView2Loader.dll` (win-x64) 159 KB, `Microsoft.Web.WebView2.WinForms.dll` 39 KB i `Microsoft.Web.WebView2.Wpf.dll` 83 KB. Izmjereno u CI-ju (artefakt `Ductura-Setup-x64`, 17. 11. 2026.): 50 873 818 B s WebView2 prema 50 535 114 B na `main`, dakle oko 0,33 MB više. Najveći dio paketa i dalje je samostalni .NET 8. |
 | Runtime | Paket ne nosi WebView2 runtime (Evergreen). Windows 11 ga ima ugrađenog, a Windows 10 obično preko Microsoft Edgea. Ako runtime nedostaje, prozor prikazuje „Za prikaz Ducture treba Microsoft Edge WebView2 Runtime.” Aplikacija runtime ne preuzima i ne instalira. To ponašanje CI ne može pokazati jer `windows-latest` ima runtime; dokazano je samo jediničnim testom. |
 | Podaci | WebView2 sprema podatke u `%LOCALAPPDATA%\Ductura\WebView2`, jer instalacija u Program Files nije zapisiva. |
 | Navigacija | Još nema pravila za navigaciju unutar prozora (DAN-960). |
