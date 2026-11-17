@@ -1,6 +1,8 @@
 # Ductura / desktop-windows
 
-Windows aplikacija i instalacijski paket. Tehnologija: C# / .NET 8 (WinForms za početak, editor kasnije preko WebView2), paket preko Inno Setupa.
+Windows aplikacija i instalacijski paket. Tehnologija: C# / .NET 8 (WinForms za početak, editor kasnije preko WebView2; ovisi o odluci 8, otvoreno), paket preko Inno Setupa.
+
+Plan repozitorija: [docs/PLAN.md](docs/PLAN.md).
 
 ## Funkcionalna provjera
 
