@@ -42,13 +42,15 @@ function Invoke-ShellSmoke([string]$Exe, [int]$ExpectedCode, [string]$ExpectedLi
         throw "Prozor: očekivano kod $ExpectedCode i '$ExpectedLine', dobiveno kod $($p.ExitCode) i '$got'"
     }
 }
+# The smoke mode has its own WebView2 folder in TEMP; the user's profile in LOCALAPPDATA is never touched.
+$data = Join-Path ([IO.Path]::GetTempPath()) 'Ductura-shell-smoke\WebView2'
+Remove-Item $data -Recurse -Force -ErrorAction SilentlyContinue
 [xml]$props = Get-Content "$PSScriptRoot\..\..\Directory.Build.props"
 $webUrl = ($props.Project.PropertyGroup | Where-Object { $_.DucturaWebUrl }).DucturaWebUrl
 Invoke-ShellSmoke $target 0 "Ductura WebView2 $webUrl"
 
 # 6. S neispravnom adresom (http) prozor pokazuje samo poruku, bez WebView2: ni podatkovna mapa ne nastaje.
 #    /p: je ovdje samo za test; isporučena adresa ostaje u Directory.Build.props.
-$data = Join-Path $env:LOCALAPPDATA 'Ductura\WebView2'
 if (-not (Test-Path $data)) { throw "WebView2 nije stvorio podatkovnu mapu: $data" }
 # WebView2 child processes may hold the folder briefly after the window closes.
 Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue

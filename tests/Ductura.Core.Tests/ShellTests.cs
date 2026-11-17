@@ -49,6 +49,20 @@ public class ShellTests
             Startup.ShellSmoke(ShellOutcome.WebView, "https://ductura.org/app/"));
     }
 
+    // The smoke test must never touch the user's WebView2 profile (review c.6948288725).
+    [Theory]
+    [InlineData(@"C:\Users\Test Č\AppData\Local", @"C:\Users\Test Č\AppData\Local\Temp")]
+    [InlineData(@"C:\Users\x\AppData\Local", @"D:\a\_temp")]
+    public void Smoke_koristi_vlastitu_mapu_izvan_korisnikovog_profila(string localAppData, string temp)
+    {
+        var user = Startup.WebViewDataFolder(LaunchOptions.Parse([]), localAppData, temp);
+        var smoke = Startup.WebViewDataFolder(LaunchOptions.Parse(["--shell-smoke-out", "x.txt"]), localAppData, temp);
+        Assert.Equal(Path.Combine(localAppData, "Ductura", "WebView2"), user);
+        Assert.Equal(Path.Combine(temp, "Ductura-shell-smoke", "WebView2"), smoke);
+        Assert.False(smoke.StartsWith(user, StringComparison.OrdinalIgnoreCase));
+        Assert.False(user.StartsWith(smoke, StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public void Shell_smoke_out_bez_vrijednosti_se_ignorira()
     {

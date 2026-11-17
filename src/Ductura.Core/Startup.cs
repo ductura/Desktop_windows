@@ -20,6 +20,15 @@ public static class Startup
     /// <summary>Tekst kad se WebView2 ne može pokrenuti iz drugog razloga (npr. podatkovna mapa nije zapisiva).</summary>
     public const string WebViewFailedText = "Prikaz Ducture nije se mogao pokrenuti.";
 
+    /// <summary>
+    /// Podatkovna mapa WebView2: po korisniku (instalacija u Program Files nije zapisiva). Način --shell-smoke-out
+    /// ima vlastitu mapu u TEMP-u, pa funkcionalni test nikad ne dira korisnikov profil.
+    /// </summary>
+    public static string WebViewDataFolder(LaunchOptions options, string localAppData, string temp) =>
+        options.ShellSmokeOutput is null
+            ? Path.Combine(localAppData, "Ductura", "WebView2")
+            : Path.Combine(temp, "Ductura-shell-smoke", "WebView2");
+
     /// <summary>Sadržaj prozora (DAN-956): WebView2 samo s provjerenom adresom, inače samo poruka.</summary>
     public static ShellView Shell(LaunchOptions options, WebAddress? web) =>
         LinkUrl(options, web) is { } url ? new ShellView(url, null) : new ShellView(null, InvalidAddressText);

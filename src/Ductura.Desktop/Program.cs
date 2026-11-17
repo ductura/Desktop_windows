@@ -32,6 +32,7 @@ internal sealed class MainForm : Form
     // --shell-smoke-out: the window reports what it showed and closes; no report within the limit is exit code 2.
     private static readonly TimeSpan SmokeLimit = TimeSpan.FromSeconds(90);
     private readonly string? _smokeOut;
+    private readonly LaunchOptions _options;
     private bool _reported;
 
     public int ExitCode { get; private set; }
@@ -40,6 +41,7 @@ internal sealed class MainForm : Form
     {
         Text = Packaging.ProductName;
         Width = 960; Height = 640;
+        _options = options;
         _smokeOut = options.ShellSmokeOutput;
         // Fail closed: never open an address that did not pass the check, and create no WebView2 for it.
         var view = Startup.Shell(options, web);
@@ -65,8 +67,8 @@ internal sealed class MainForm : Form
     {
         try
         {
-            // The install folder may be read-only (Program Files): keep WebView2 data per user.
-            var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Ductura", "WebView2");
+            var data = Startup.WebViewDataFolder(_options,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Path.GetTempPath());
             var env = await CoreWebView2Environment.CreateAsync(null, data);
             await webView.EnsureCoreWebView2Async(env);
         }
