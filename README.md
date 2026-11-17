@@ -13,7 +13,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 
 | Mapa | Sadržaj |
 |---|---|
-| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`) |
+| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
 | `tests/functional` | Funkcionalni test instalacije |
@@ -46,6 +46,16 @@ Prozor s provjerenom adresom stvara kontrolu WebView2 i otvara adresu iz `WebAdd
 | Navigacija | Još nema pravila za navigaciju unutar prozora (DAN-960). |
 
 Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapiše `Ductura WebView2 <adresa>` (kod 0) kad WebView2 počne otvarati adresu, `Ductura poruka` (kod 1) kad adresa nije ispravna `Ductura bez WebView2` (kod 3) kad nema runtimea i `Ductura greška WebView2` (kod 4) kad se WebView2 ne pokrene iz drugog razloga. Ako u 90 sekundi nema ishoda, izlazi s kodom 2. U tom načinu navigacija se zaustavlja čim počne, pa test ne ovisi o mreži ni o serveru. Kod neispravne adrese test provjerava i da podatkovna mapa WebView2 nije nastala.
+
+## Provjera verzije pri pokretanju (DAN-944)
+
+`ClientVersion.Decide` u `Ductura.Core` uspoređuje `minClientVersion` iz `health` sa svojom verzijom. Poziv `health` i prozor još nisu spojeni (944-2, nakon ugovornog klijenta DAN-958).
+
+| Ishod | Kada | Web |
+|---|---|---|
+| `UpdateRequired` | klijent je stariji od `minClientVersion`, ili vlastita verzija nije strogi `major.minor.patch` | ne otvara se; poruka „Ova verzija Ducture je zastarjela. Za nastavak instaliraj novu verziju.” |
+| `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se: rad se piše i bez mreže, a web sam prikazuje stanje veze |
+| `Current` | klijent je jednak ili noviji, ili odgovor nema `minClientVersion` | otvara se |
 
 ## Pokretanje
 
