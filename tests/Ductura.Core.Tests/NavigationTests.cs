@@ -40,6 +40,10 @@ public class NavigationTests
     [InlineData(@"https://ductura.org\app\")]
     [InlineData(@"https:\\ductura.org\app\")]
     [InlineData("https:ductura.org/app/")]
+    [InlineData("https:/ductura.org/app/")]
+    [InlineData("https:///ductura.org/app/")]
+    [InlineData("//ductura.org/app/")]
+    [InlineData("C:/Users/x/doc.html")]
     // control, whitespace and non-ASCII characters
     [InlineData(" https://ductura.org/app/")]
     [InlineData("https://ductura.org/app/ ")]
@@ -54,6 +58,8 @@ public class NavigationTests
     [InlineData("https://user@ductura.org/app/")]
     [InlineData("https://ductura.org@evil.com/app/")]
     [InlineData("https://user:pass@evil.com/")]
+    [InlineData("https://@ductura.org/app/")]
+    [InlineData("https://:@ductura.org/app/")]
     public void Odbija(string? url) => Assert.Equal(NavigationDecision.Block, Decide(url));
 
     [Theory]
@@ -64,9 +70,14 @@ public class NavigationTests
     [InlineData("https://127.0.0.1/app/")]
     [InlineData("https://[::1]/app/")]
     [InlineData("https://xn--dctura-3ya.org/app/")]
-    [InlineData("https://tostring/")]
-    [InlineData("https://__proto__.org/")]
+    [InlineData("https://localhost/")]
     [InlineData("https://ductura.org:8443/app/")]
+    // a port, even the default one, is not the shell address
+    [InlineData("https://ductura.org:443/app/")]
+    [InlineData("https://ductura.org:0443/app/")]
+    [InlineData("https://ductura.org:/app/")]
+    // the host in another letter case is not the shell address (WebView2 reports it lowercase)
+    [InlineData("https://Ductura.org/app/")]
     [InlineData("https://www.srce.hr/")]
     public void Drugi_https_host_ide_u_preglednik(string url) =>
         Assert.Equal(NavigationDecision.Browser, Decide(url));
@@ -75,12 +86,20 @@ public class NavigationTests
     [InlineData("https://ductura.org/app/")]
     [InlineData("https://ductura.org/app/#/doc/demo-1")]
     [InlineData("https://ductura.org/app/?x=1")]
-    [InlineData("https://ductura.org:443/app/")]
     [InlineData("https://ductura.org")]
-    [InlineData("HTTPS://DUCTURA.ORG/app/")]
+    [InlineData("HTTPS://ductura.org/app/")]
+    [InlineData("https://ductura.org/x#@evil.com")]
+    [InlineData("https://ductura.org?@evil.com")]
     [InlineData("https://ductura.org/%C4%8D/")]
     public void Host_s_popisa_ostaje_u_ljusci(string url) =>
         Assert.Equal(NavigationDecision.Shell, Decide(url));
+
+    [Fact]
+    public void Popis_null_ili_s_velikim_slovima_nista_ne_drzi_u_ljusci()
+    {
+        Assert.Equal(NavigationDecision.Browser, Navigation.Decide("https://ductura.org/app/", null));
+        Assert.Equal(NavigationDecision.Browser, Navigation.Decide("https://ductura.org/app/", ["Ductura.org"]));
+    }
 
     [Fact]
     public void Prazan_popis_hostova_nista_ne_drzi_u_ljusci() =>
