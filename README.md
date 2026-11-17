@@ -13,7 +13,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 
 | Mapa | Sadržaj |
 |---|---|
-| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije) |
+| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
 | `tests/functional` | Funkcionalni test instalacije |
