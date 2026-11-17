@@ -84,6 +84,7 @@
         "resolved": "2.0.12",
         "contentHash": "b/w8GfmVjf5c+8sTtGRVuwj6uC5KoPIn8+795xKlnGBBtph4FIVvgJVnh+x9dbDOkrst7XivIDJgyZSDFNsOYA=="
       }
-    }
+    },
+    "net8.0/win-x64": {}
   }
 }
