@@ -137,6 +137,32 @@ public class HealthProbeTests
         Assert.Empty(stub.Requests);
     }
 
+    // Every outcome after a caller's cancel throws, also when the handler answers without throwing (review FAIL on 6c47f15).
+    public static TheoryData<HttpStatusCode, string?, string> AnswersAfterCancel => new()
+    {
+        { HttpStatusCode.InternalServerError, null, "application/json" },
+        { HttpStatusCode.NoContent, null, "application/json" },
+        { HttpStatusCode.OK, """{"status":"ok"}""", "text/html" },
+        { HttpStatusCode.OK, "{}", "application/json" },
+        { HttpStatusCode.OK, """{"status":"ok","minClientVersion":"1.0.0"}""", "application/json" },
+    };
+
+    [Theory]
+    [MemberData(nameof(AnswersAfterCancel))]
+    public async Task Otkazivanje_pozivatelja_baca_i_kad_handler_odgovori(HttpStatusCode code, string? json, string type)
+    {
+        using var cancel = new CancellationTokenSource();
+        var stub = new Stub((_, _) =>
+        {
+            cancel.Cancel();
+            return Task.FromResult(new HttpResponseMessage(code)
+            {
+                Content = json is null ? null : new StringContent(json, Encoding.UTF8, type),
+            });
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Read(stub, cancel.Token));
+    }
+
     [Fact]
     public async Task Otkazivanje_pozivatelja_baca_i_kad_handler_baci_drugu_iznimku()
     {

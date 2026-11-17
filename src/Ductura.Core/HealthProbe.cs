@@ -40,27 +40,38 @@ public static class HealthProbe
             BaseUrl = apiBase.GetLeftPart(UriPartial.Path).TrimEnd('/'),
         };
         var request = new DucturaApiClient(adapter).Api.V1.Health.ToGetRequestInformation();
+        HealthReading reading;
         try
         {
-            // The generated request (path, method, Accept), sent as is; status, media type and body are checked
-            // here, because the generated model turns a wrong type into null and ignores the media type.
-            using var message = await adapter.ConvertToNativeRequestAsync<HttpRequestMessage>(request, linked.Token);
-            using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, linked.Token);
-            if (!response.IsSuccessStatusCode
-                || !string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
-                return NoAnswer;
-            await using var body = await response.Content.ReadAsStreamAsync(linked.Token);
-            using var json = await JsonDocument.ParseAsync(body, cancellationToken: linked.Token);
-            return Read(json.RootElement);
+            reading = await SendAsync(adapter, http, request, linked.Token);
         }
         catch (Exception) when (!cancel.IsCancellationRequested)
         {
-            return NoAnswer;
+            reading = NoAnswer;
         }
         catch (Exception)
         {
             throw new OperationCanceledException(cancel);
         }
+        // One exit for every outcome: a caller who cancelled never gets a result, also when the handler
+        // cancelled and then answered without throwing.
+        cancel.ThrowIfCancellationRequested();
+        return reading;
+    }
+
+    // The generated request (path, method, Accept), sent as is; status, media type and body are checked
+    // here, because the generated model turns a wrong type into null and ignores the media type.
+    private static async Task<HealthReading> SendAsync(
+        HttpClientRequestAdapter adapter, HttpClient http, Microsoft.Kiota.Abstractions.RequestInformation request, CancellationToken token)
+    {
+        using var message = await adapter.ConvertToNativeRequestAsync<HttpRequestMessage>(request, token);
+        using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode
+            || !string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+            return NoAnswer;
+        await using var body = await response.Content.ReadAsStreamAsync(token);
+        using var json = await JsonDocument.ParseAsync(body, cancellationToken: token);
+        return Read(json.RootElement);
     }
 
     private static readonly HealthReading NoAnswer = new(false, null);
