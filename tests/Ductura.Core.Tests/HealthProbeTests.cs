@@ -60,10 +60,38 @@ public class HealthProbeTests
     public async Task Odgovor_izvan_ugovora_nije_odgovor(HttpStatusCode code, string? json) =>
         Assert.Equal(new HealthReading(false, null), await Read(Body(code, json)));
 
+    [Theory]
+    [InlineData("<html>status ok</html>", "text/html")]
+    [InlineData("""{"status":"ok","minClientVersion":"1.0.0"}""", "text/html")]
+    [InlineData("""{"status":"ok","minClientVersion":"1.0.0"}""", "text/plain")]
+    [InlineData("""{"status":"ok","minClientVersion":"1.0.0"}""", "application/problem+json")]
+    public async Task Druga_vrsta_sadrzaja_nije_odgovor_ni_s_ispravnim_JSON_om(string body, string type) =>
+        Assert.Equal(new HealthReading(false, null), await Read(Body(HttpStatusCode.OK, body, type)));
+
     [Fact]
-    public async Task Html_stranica_s_kodom_200_nije_odgovor() =>
-        Assert.Equal(new HealthReading(false, null),
-            await Read(Body(HttpStatusCode.OK, "<html>status ok</html>", "text/html")));
+    public async Task Vrsta_sadrzaja_s_parametrom_i_velikim_slovima_je_JSON()
+    {
+        var stub = new Stub((_, _) =>
+        {
+            var content = new StringContent("""{"status":"ok","minClientVersion":"1.0.0"}""");
+            content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("Application/JSON; charset=utf-8");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        });
+        Assert.Equal(new HealthReading(true, "1.0.0"), await Read(stub));
+    }
+
+    [Fact]
+    public async Task Zahtjev_trazi_JSON()
+    {
+        string? accept = null;
+        var stub = new Stub((r, _) =>
+        {
+            accept = r.Headers.Accept.ToString();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        });
+        await Read(stub);
+        Assert.Equal("application/json", accept);
+    }
 
     public static TheoryData<Exception> HandlerErrors => new()
     {

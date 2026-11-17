@@ -15,8 +15,8 @@ public sealed record HealthReading(bool Answered, string? MinClientVersion);
 public static class HealthProbe
 {
     /// <summary>
-    /// Nije odgovor: svaka iznimka poziva (mreža, ne-2xx, tijelo koje nije JSON, druga vrsta sadržaja), prazno tijelo
-    /// (204, 3xx), tijelo koje nije JSON objekt, <c>status</c> različit od <c>"ok"</c>, <c>minClientVersion</c> koji nije
+    /// Nije odgovor: svaka iznimka poziva (mreža, tijelo koje nije JSON), ne-2xx, vrsta sadržaja koja nije
+    /// <c>application/json</c> (i bez tijela: 204, 3xx), tijelo koje nije JSON objekt, <c>status</c> različit od <c>"ok"</c>, <c>minClientVersion</c> koji nije
     /// string ni null, istek roka. Svaki 2xx s ispravnim tijelom je odgovor. Dodatni ključevi se toleriraju (budući
     /// minor ugovora smije dodati polje); kod ponovljenog ključa vrijedi zadnji, kao u JSON.parse.
     /// Otkazivanje pozivatelja uvijek baca, bez obzira na vrstu iznimke.
@@ -42,10 +42,14 @@ public static class HealthProbe
         var request = new DucturaApiClient(adapter).Api.V1.Health.ToGetRequestInformation();
         try
         {
-            // The generated request (path, method, Accept); the body is checked here, because the generated
-            // model turns a wrong type into null and so cannot tell it from an absent field.
-            await using var body = await adapter.SendPrimitiveAsync<Stream>(request, cancellationToken: linked.Token);
-            if (body is null) return NoAnswer;
+            // The generated request (path, method, Accept), sent as is; status, media type and body are checked
+            // here, because the generated model turns a wrong type into null and ignores the media type.
+            using var message = await adapter.ConvertToNativeRequestAsync<HttpRequestMessage>(request, linked.Token);
+            using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, linked.Token);
+            if (!response.IsSuccessStatusCode
+                || !string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+                return NoAnswer;
+            await using var body = await response.Content.ReadAsStreamAsync(linked.Token);
             using var json = await JsonDocument.ParseAsync(body, cancellationToken: linked.Token);
             return Read(json.RootElement);
         }
