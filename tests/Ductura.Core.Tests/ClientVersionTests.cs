@@ -75,5 +75,5 @@ public class ClientVersionTests
 
     [Fact]
     public void Poruka_o_nadogradnji_je_na_hrvatskom() =>
-        Assert.Equal("Ova verzija Ducture je zastarjela. Za nastavak instaliraj novu verziju.", ClientVersion.UpdateRequiredText);
+        Assert.Equal("Ova verzija Ducture više nije podržana. Preuzmite i instalirajte noviju verziju.", ClientVersion.UpdateRequiredText);
 }

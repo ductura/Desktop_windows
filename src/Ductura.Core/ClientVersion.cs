@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using System.Text.RegularExpressions;
 
@@ -6,16 +7,17 @@ namespace Ductura.Core;
 /// <summary>
 /// Provjera verzije pri pokretanju (DAN-944): <c>health.minClientVersion</c> servera prema vlastitoj verziji klijenta.
 /// Čista funkcija bez mreže i sata; poziv <c>health</c> i prozor su zaseban korak (944-2).
+/// <see cref="Packaging.IsNewer"/> ostaje zaseban: uspoređuje ponuđeni instalacijski paket, ne ugovor.
 /// </summary>
 public static partial class ClientVersion
 {
     /// <summary>Poruka umjesto weba kad je klijent stariji od najstarije verzije koju server poslužuje.</summary>
-    public const string UpdateRequiredText = "Ova verzija Ducture je zastarjela. Za nastavak instaliraj novu verziju.";
+    public const string UpdateRequiredText = "Ova verzija Ducture više nije podržana. Preuzmite i instalirajte noviju verziju.";
 
     /// <summary>
     /// Pravila redom: vlastita verzija koja nije strogi major.minor.patch traži nadogradnju (fail closed);
     /// server koji nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) je nedostupan;
-    /// odgovor bez <c>minClientVersion</c> (polje je u ugovoru neobavezno) ne traži ništa;
+    /// odgovor bez <c>minClientVersion</c> (null ili izostalo; polje je u ugovoru neobavezno) ne traži ništa;
     /// <c>minClientVersion</c> izvan uzorka ugovora je nečitljiv odgovor, dakle nedostupan server;
     /// inače se dijelovi uspoređuju kao cijeli brojevi bez gornje granice.
     /// </summary>
@@ -33,8 +35,8 @@ public static partial class ClientVersion
     }
 
     /// <summary>
-    /// Web se otvara osim kad je klijent zastario. Nedostupan server otvara web: rad se piše i bez mreže,
-    /// a web sam prikazuje stanje veze; blokada bi zaključala sve korisnike dok server ne radi.
+    /// Web se otvara osim kad je klijent zastario. Nedostupan server ne blokira: web i preloader (D-300) prikazuju
+    /// stanje servera. minClientVersion je savjet za nadogradnju, ne sigurnosna granica (blokiranjem healtha se zaobilazi).
     /// </summary>
     public static bool OpensWeb(VersionVerdict verdict) => verdict != VersionVerdict.UpdateRequired;
 
@@ -47,7 +49,7 @@ public static partial class ClientVersion
     {
         parts = [];
         if (text is null || Pattern().Match(text) is not { Success: true } m) return false;
-        parts = [.. m.Groups.Values.Skip(1).Select(g => BigInteger.Parse(g.Value, System.Globalization.CultureInfo.InvariantCulture))];
+        parts = [.. m.Groups.Values.Skip(1).Select(g => BigInteger.Parse(g.Value, NumberStyles.None, CultureInfo.InvariantCulture))];
         return true;
     }
 }

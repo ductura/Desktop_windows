@@ -49,12 +49,12 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 ## Provjera verzije pri pokretanju (DAN-944)
 
-`ClientVersion.Decide` u `Ductura.Core` uspoređuje `minClientVersion` iz `health` sa svojom verzijom. Poziv `health` i prozor još nisu spojeni (944-2, nakon ugovornog klijenta DAN-958).
+`ClientVersion.Decide` u `Ductura.Core` uspoređuje `minClientVersion` iz `health` sa svojom verzijom. Poziv `health` i prozor još nisu spojeni (944-2, nakon ugovornog klijenta DAN-958). Paket je sada 0.1.0, a server šalje `minClientVersion` 1.0.0, pa spajanje čeka odluku o verziji (pitanje za vlasnika).
 
 | Ishod | Kada | Web |
 |---|---|---|
-| `UpdateRequired` | klijent je stariji od `minClientVersion`, ili vlastita verzija nije strogi `major.minor.patch` | ne otvara se; poruka „Ova verzija Ducture je zastarjela. Za nastavak instaliraj novu verziju.” |
-| `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se: rad se piše i bez mreže, a web sam prikazuje stanje veze |
+| `UpdateRequired` | klijent je stariji od `minClientVersion`, ili vlastita verzija nije strogi `major.minor.patch` | ne otvara se; poruka „Ova verzija Ducture više nije podržana. Preuzmite i instalirajte noviju verziju.” |
+| `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se: web i preloader (D-300) prikazuju stanje servera; `minClientVersion` je savjet za nadogradnju, ne sigurnosna granica |
 | `Current` | klijent je jednak ili noviji, ili odgovor nema `minClientVersion` | otvara se |
 
 ## Pokretanje
