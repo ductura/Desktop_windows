@@ -7,7 +7,7 @@ Plan repozitorija: [docs/PLAN.md](docs/PLAN.md).
 ## Funkcionalna provjera
 
 Korisnik preuzima paket, instalira ga i pokreće Ducturu iz izbornika Start.
-Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera prečaca u izborniku Start, pokretanje preko njega (`--smoke-out`) i prozor s WebView2 (`--shell-smoke-out`), uz zasebnu objavu s neispravnom adresom. Radi samo na Windowsu i pokreće se u CI-ju.
+Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera prečaca u izborniku Start, pokretanje preko njega (`--smoke-out`) i prozor s WebView2 (`--shell-smoke-out`), uz zasebnu objavu s neispravnom adresom. Zatim deinstalira paket i ponavlja instalaciju u mapu s razmakom i hrvatskim znakovima (`C:\Ductura test\Šđčćž mapa`, Inno `/DIR=`): provjerava ključ deinstalacije, prečac i `--smoke-out` iz te mape te deinstalaciju bez ostataka (ključ, mapa, prečac, protokol `ductura`). Prije toga isti prolaz bez navodnika oko `/DIR` mora završiti u `C:\Ductura` i pasti na provjeri, inače test pada (DAN-996). Radi samo na Windowsu i pokreće se u CI-ju.
 
 ## Struktura
 
