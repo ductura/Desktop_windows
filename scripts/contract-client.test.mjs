@@ -4,14 +4,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compareTrees, parseLock, readTree, verifyTarball } from './contract-client.mjs';
+import { compareTrees, parseLock, readTree, tarballUrl, verifyTarball } from './contract-client.mjs';
 
 const SHA = '5594110cfcf6ed1d9ec6262803f2246f8b1098b794c9bf2d5bb02fbbc6157e70';
-const URL_220 = 'https://github.com/ductura/server/releases/download/contracts-v2.2.0/ductura-contracts-2.2.0.tgz';
-const lock = (o) => JSON.stringify({ version: '2.2.0', url: URL_220, sha256: SHA, ...o });
+const lock = (o) => JSON.stringify({ version: '2.2.0', sha256: SHA, ...o });
 
 const BAD_LOCKS = [
   ['sha256 in upper case', lock({ sha256: SHA.toUpperCase() })],
@@ -20,34 +19,38 @@ const BAD_LOCKS = [
   ['sha256 with LF', lock({ sha256: `${SHA}\n` })],
   ['sha256 with CRLF', lock({ sha256: `${SHA}\r\n` })],
   ['sha256 with tab', lock({ sha256: `${SHA}\t` })],
-  ['sha256 with NBSP', lock({ sha256: `${SHA}\u00a0` })],
+  ['sha256 with NBSP', lock({ sha256: `${SHA} ` })],
   ['sha256 with DEL', lock({ sha256: `${SHA}\u007f` })],
-  ['version with LF', lock({ version: '2.2.0\n', url: URL_220.replaceAll('2.2.0', '2.2.0\n') })],
-  ['version with a leading zero', lock({ version: '2.02.0', url: URL_220.replaceAll('2.2.0', '2.02.0') })],
-  ['version not a number', lock({ version: 'latest', url: URL_220.replaceAll('2.2.0', 'latest') })],
-  ['url of another version', lock({ url: URL_220.replaceAll('2.2.0', '2.1.1') })],
-  ['url of another host', lock({ url: URL_220.replace('github.com', 'example.org') })],
-  ['url of another repository', lock({ url: URL_220.replace('ductura/server', 'ductura/web') })],
-  ['http url', lock({ url: URL_220.replace('https:', 'http:') })],
-  ['url with a query', lock({ url: `${URL_220}?x=1` })],
-  ['url with a trailing tab', lock({ url: `${URL_220}\t` })],
-  ['Windows path', lock({ url: 'C:\\contracts\\ductura-contracts-2.2.0.tgz' })],
-  ['extra key', lock({ openapi: 'x' })],
+  ['version with LF', lock({ version: '2.2.0\n' })],
+  ['version with a leading v', lock({ version: 'v2.2.0' })],
+  ['version with a leading zero', lock({ version: '02.2.0' })],
+  ['prerelease version', lock({ version: '2.2.0-rc.1' })],
+  ['version of two parts', lock({ version: '2.2' })],
+  ['version path', lock({ version: '2.2.0/../../x' })],
+  ['version as a number', lock({ version: 2.2 })],
+  ['empty version', lock({ version: '' })],
+  ['extra key url', lock({ url: 'https://example.org/x.tgz' })],
   ['__proto__ key from JSON.parse', lock({}).replace('{', '{"__proto__":{"x":1},')],
-  ['missing sha256', JSON.stringify({ version: '2.2.0', url: URL_220 })],
-  ['inherited toString is not a field', JSON.stringify({ version: '2.2.0', url: URL_220, toString: SHA })],
+  ['missing sha256', JSON.stringify({ version: '2.2.0' })],
+  ['toString key', lock({ toString: SHA })],
   ['constructor key', lock({ constructor: SHA })],
   ['array', `[${lock({})}]`],
   ['null', 'null'],
   ['not JSON', '{version'],
 ];
 
+test('inherited keys are not lock fields', () => {
+  const inherited = Object.create({ version: '2.2.0', sha256: SHA });
+  assert.throws(() => parseLock(JSON.stringify(inherited)));
+});
+
 for (const [name, text] of BAD_LOCKS) {
   test(`lock is refused: ${name}`, () => assert.throws(() => parseLock(text)));
 }
 
 test('lock of 2.2.0 is accepted', () => {
-  assert.deepEqual(parseLock(lock({})), { version: '2.2.0', url: URL_220, sha256: SHA });
+  assert.deepEqual(parseLock(lock({})), { version: '2.2.0', sha256: SHA });
+  assert.equal(tarballUrl('2.2.0'), 'https://github.com/ductura/server/releases/download/contracts-v2.2.0/ductura-contracts-2.2.0.tgz');
 });
 
 test('tarball with another sha256 is refused, the locked one passes', () => {
@@ -59,7 +62,8 @@ test('tarball with another sha256 is refused, the locked one passes', () => {
 });
 
 const tree = (o) => new Map(Object.entries(o).map(([k, v]) => [k, Buffer.from(v)]));
-const BASE = { 'Client.cs': 'a b\nc\n', 'Api/V1/Health.cs': 'x\n' };
+const H = 'Api/V1/Health/HealthRequestBuilder.cs';
+const BASE = { 'Client.cs': 'a b\nc\n', [H]: 'x\n' };
 
 const DIVERGENT = [
   ['one changed byte', { ...BASE, 'Client.cs': 'a b\nd\n' }],
@@ -69,9 +73,13 @@ const DIVERGENT = [
   ['added DEL', { ...BASE, 'Client.cs': 'a b\nc\u007f\n' }],
   ['missing file', { 'Client.cs': BASE['Client.cs'] }],
   ['extra file in a subfolder', { ...BASE, 'Api/V1/Extra.cs': '' }],
-  ['name differs only in case', { 'Client.cs': BASE['Client.cs'], 'Api/V1/health.cs': 'x\n' }],
+  ['name differs only in case', { 'Client.cs': BASE['Client.cs'], [H.toLowerCase()]: 'x\n' }],
   ['empty tree', {}],
 ];
+
+test('both trees empty is not a pass (nothing generated)', () => {
+  assert.notDeepEqual(compareTrees(tree({}), tree({})), []);
+});
 
 for (const [name, actual] of DIVERGENT) {
   test(`trees diverge: ${name}`, () => {
@@ -83,8 +91,10 @@ test('equal trees pass', () => assert.deepEqual(compareTrees(tree(BASE), tree({ 
 
 test('readTree reads nested files with / separators', () => {
   const dir = mkdtempSync(join(tmpdir(), 'contract-client-'));
-  mkdirSync(join(dir, 'Api', 'V1'), { recursive: true });
+  mkdirSync(join(dir, 'Api', 'V1', 'Health'), { recursive: true });
   writeFileSync(join(dir, 'Client.cs'), BASE['Client.cs']);
-  writeFileSync(join(dir, 'Api', 'V1', 'Health.cs'), BASE['Api/V1/Health.cs']);
+  writeFileSync(join(dir, ...H.split('/')), BASE[H]);
   assert.deepEqual(compareTrees(tree(BASE), readTree(dir)), []);
+  symlinkSync(join(dir, 'Client.cs'), join(dir, 'Link.cs'));
+  assert.throws(() => readTree(dir), /not a regular file: Link.cs/);
 });

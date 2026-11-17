@@ -19,7 +19,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
 | `tests/functional` | Funkcionalni test instalacije |
 | `scripts/contract-client.mjs` | Generiranje i provjera ugovornog klijenta (`generate`, `check`) |
-| `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo tom testu (YAML parser `yaml`); aplikacija ne koristi Node. |
+| `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo Node skriptama CI-ja (YAML parser `yaml`); aplikacija ne koristi Node. |
 | `.github/workflows/ci.yml` | Jedini workflow za PR: `build-test`, `ci-ok-test`, `contract-client`, skeniranje tajni i pregled ovisnosti iz `ductura/.github` (puni SHA) i obvezna zbirna provjera `ci-ok`. Dozvola je samo `contents: read`. |
 | `installer/Ductura.iss` | Inno Setup skripta → `dist/Ductura-Setup-x64.exe` |
 
@@ -51,10 +51,10 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 ## Ugovorni klijent (DAN-958)
 
-`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: verzija, URL tarballa na GitHub Releases ductura/servera (slijedi iz verzije) i njegov sha256. Generira se samo `/api/v1/health` (`platform.health.get`). Aplikacija klijent još ne koristi.
+`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/servera slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Aplikacija klijent još ne koristi. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](docs/PLAN.md) §0).
 
-- Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
-- CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak posla izmijeni jednu generiranu datoteku i provjerava da tada `check` pada.
+- Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu (na Windowsu skripta odbija rad, jer uspoređuje bajtove) i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
+- CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak dokazuje da `check` pada kad se izmijeni generirana datoteka i kad se izmijeni opis polja `health` u OpenAPI-ju. Posao preuzima tarball s github.com, pa ispad GitHuba ruši `ci-ok`.
 
 ## Pokretanje
 
