@@ -29,4 +29,34 @@ if ($run.ExitCode -ne 0) { throw "Ductura se nije pokrenula (kod $($run.ExitCode
 $line = Get-Content $out -Raw
 if ($line -notmatch '^Ductura OK') { throw "Neočekivan izlaz: $line" }
 
-Write-Host "OK: instalirano, prečac postoji, pokretanje radi ($line)"
+# 5. Prozor stvara WebView2 s adresom iz konfiguracije paketa (DAN-956); redak piše nakon NavigationStarting.
+function Invoke-ShellSmoke([string]$Exe, [int]$ExpectedCode, [string]$ExpectedLine) {
+    $shellOut = Join-Path $env:TEMP 'ductura-shell-smoke.txt'
+    Remove-Item $shellOut -ErrorAction SilentlyContinue
+    # Not -Wait: it also waits for WebView2 child processes. The app gives up after 90 s, the test after 120 s.
+    $p = Start-Process $Exe -ArgumentList '--shell-smoke-out', "`"$shellOut`"" -PassThru
+    $null = $p.Handle
+    if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "Prozor se nije zatvorio u 120 s" }
+    $got = if (Test-Path $shellOut) { Get-Content $shellOut -Raw } else { '<nema retka>' }
+    if ($p.ExitCode -ne $ExpectedCode -or $got -cne $ExpectedLine) {
+        throw "Prozor: očekivano kod $ExpectedCode i '$ExpectedLine', dobiveno kod $($p.ExitCode) i '$got'"
+    }
+}
+[xml]$props = Get-Content "$PSScriptRoot\..\..\Directory.Build.props"
+$webUrl = ($props.Project.PropertyGroup | Where-Object { $_.DucturaWebUrl }).DucturaWebUrl
+Invoke-ShellSmoke $target 0 "Ductura WebView2 $webUrl"
+
+# 6. S neispravnom adresom (http) prozor pokazuje samo poruku, bez WebView2: ni podatkovna mapa ne nastaje.
+#    /p: je ovdje samo za test; isporučena adresa ostaje u Directory.Build.props.
+$data = Join-Path $env:LOCALAPPDATA 'Ductura\WebView2'
+if (-not (Test-Path $data)) { throw "WebView2 nije stvorio podatkovnu mapu: $data" }
+# WebView2 child processes may hold the folder briefly after the window closes.
+Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
+Remove-Item $data -Recurse -Force
+$invalid = Join-Path $env:TEMP 'ductura-invalid-address'
+dotnet publish "$PSScriptRoot\..\..\src\Ductura.Desktop" -c Release -r win-x64 --self-contained true -o $invalid /p:DucturaWebUrl=http://ductura.org/app/
+if ($LASTEXITCODE -ne 0) { throw "Objava s neispravnom adresom nije uspjela (kod $LASTEXITCODE)" }
+Invoke-ShellSmoke (Join-Path $invalid 'Ductura.exe') 1 'Ductura poruka'
+if (Test-Path $data) { throw "S neispravnom adresom nastala je podatkovna mapa WebView2: $data" }
+
+Write-Host "OK: instalirano, prečac postoji, pokretanje radi ($line), WebView2 otvara $webUrl, neispravna adresa daje poruku"

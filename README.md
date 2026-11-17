@@ -1,13 +1,13 @@
 # Ductura / desktop-windows
 
-Windows aplikacija i instalacijski paket. Tehnologija: C# / .NET 8 (WinForms za početak, editor kasnije preko WebView2; ovisi o odluci 8, otvoreno), paket preko Inno Setupa.
+Windows aplikacija i instalacijski paket. Tehnologija: C# / .NET 8, WinForms prozor s WebView2 (spike D-0.1, DAN-956; ovisi o odluci 8, otvoreno), paket preko Inno Setupa.
 
 Plan repozitorija: [docs/PLAN.md](docs/PLAN.md).
 
 ## Funkcionalna provjera
 
 Korisnik preuzima paket, instalira ga i pokreće Ducturu iz izbornika Start.
-Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera prečaca u izborniku Start i pokretanje preko njega (`--smoke-out`). Radi samo na Windowsu i pokreće se u CI-ju.
+Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera prečaca u izborniku Start, pokretanje preko njega (`--smoke-out`) i prozor s WebView2 (`--shell-smoke-out`), uz zasebnu objavu s neispravnom adresom. Radi samo na Windowsu i pokreće se u CI-ju.
 
 ## Struktura
 
@@ -30,9 +30,22 @@ Adresa web aplikacije nije upisana u kod. Čita se iz konfiguracije paketa u `Di
 | `DucturaWebUrl` | `https://ductura.org/app/` | Adresa s putem; rad se otvara na `<adresa>#/doc/<ID>` |
 | `DucturaWebHosts` | `ductura.org` | Dopušteni hostovi, odvojeni s `;` |
 
-`WebAddress` prihvaća samo kanonsku `https` adresu s hosta s popisa, bez porta, korisnika, upita i fragmenta, s putem koji završava s `/`. Ako adresa ne prolazi, aplikacija ne nudi poveznicu, a `--smoke` vraća 1.
+`WebAddress` prihvaća samo kanonsku `https` adresu s hosta s popisa, bez porta, korisnika, upita i fragmenta, s putem koji završava s `/`. Ako adresa ne prolazi, prozor prikazuje samo poruku i ne stvara WebView2, a `--smoke` vraća 1.
 
 Konačnu domenu (V-0) upiši u ta dva retka, ne preko `/p:`. Adresa izdavača u `installer/Ductura.iss` (`AppPublisherURL`) mijenja se zasebno.
+
+## Prozor s WebView2 (spike D-0.1, DAN-956)
+
+Prozor s provjerenom adresom stvara kontrolu WebView2 i otvara adresu iz `WebAddress`. Bez provjerene adrese prikazuje samo poruku. Nema prijave, nadogradnji ni potpisa.
+
+| Nalaz | Stanje |
+|---|---|
+| Paket | `Microsoft.Web.WebView2` 1.0.3912.50 dodaje oko 0,9 MB nekomprimiranih datoteka: `Microsoft.Web.WebView2.Core.dll` 650 KB, `WebView2Loader.dll` (win-x64) 159 KB, `Microsoft.Web.WebView2.WinForms.dll` 39 KB i `Microsoft.Web.WebView2.Wpf.dll` 83 KB. Najveći dio paketa i dalje je samostalni .NET 8. Ukupnu veličinu instalacijskog paketa pokazuje artefakt `Ductura-Setup-x64` u CI-ju. |
+| Runtime | Paket ne nosi WebView2 runtime (Evergreen). Windows 11 ga ima ugrađenog, a Windows 10 obično preko Microsoft Edgea. Ako runtime nedostaje, prozor prikazuje „Za prikaz Ducture treba Microsoft Edge WebView2 Runtime.” Aplikacija runtime ne preuzima i ne instalira. To ponašanje CI ne može pokazati jer `windows-latest` ima runtime; dokazano je samo jediničnim testom. |
+| Podaci | WebView2 sprema podatke u `%LOCALAPPDATA%\Ductura\WebView2`, jer instalacija u Program Files nije zapisiva. |
+| Navigacija | Još nema pravila za navigaciju unutar prozora (DAN-960). |
+
+Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapiše `Ductura WebView2 <adresa>` (kod 0) kad WebView2 počne otvarati adresu, `Ductura poruka` (kod 1) kad adresa nije ispravna `Ductura bez WebView2` (kod 3) kad nema runtimea i `Ductura greška WebView2` (kod 4) kad se WebView2 ne pokrene iz drugog razloga. Ako u 90 sekundi nema ishoda, izlazi s kodom 2. U tom načinu navigacija se zaustavlja čim počne, pa test ne ovisi o mreži ni o serveru. Kod neispravne adrese test provjerava i da podatkovna mapa WebView2 nije nastala.
 
 ## Pokretanje
 

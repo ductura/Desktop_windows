@@ -8,6 +8,10 @@
     <RootNamespace>Ductura.Desktop</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Window content (DAN-956). Stable release, at least two weeks old; the WebView2 runtime itself is not bundled. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3912.50" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Ductura.Core\Ductura.Core.csproj" />
   </ItemGroup>
 </Project>
