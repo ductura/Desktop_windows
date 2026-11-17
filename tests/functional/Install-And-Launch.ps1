@@ -31,7 +31,8 @@ function Assert-InstalledAt([string]$Dir) {
     }
     $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'Ductura\Ductura.lnk'
     if (-not (Test-Path -LiteralPath $lnk)) { throw "Nema prečaca u izborniku Start: $lnk" }
-    $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+    # WScript.Shell returns TargetPath through the ANSI code page (đ, č, ć become d, c, c); Shell.Application reads Unicode.
+    $target = (New-Object -ComObject Shell.Application).NameSpace((Split-Path $lnk)).ParseName('Ductura.lnk').GetLink.Path
     if ($target -ine $exe) { throw "Prečac pokazuje na $target, a ne na $exe" }
     return $exe
 }
