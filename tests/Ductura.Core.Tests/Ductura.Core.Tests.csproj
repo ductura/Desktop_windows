@@ -11,6 +11,8 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Locked @ductura/test-fakes release for ContractVectorsTests (DAN-997), next to the contract lock. -->
+    <None Include="..\..\src\Ductura.Contracts\test-fakes.lock.json" Link="test-fakes.lock.json" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\Ductura.Core\Ductura.Core.csproj" />
   </ItemGroup>
 </Project>

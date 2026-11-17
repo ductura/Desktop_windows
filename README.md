@@ -16,7 +16,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 | `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
-| `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
+| `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) i ugovornih vektora `health` (DAN-997) |
 | `tests/functional` | Funkcionalni test instalacije |
 | `scripts/contract-client.mjs` | Generiranje i provjera ugovornog klijenta (`generate`, `check`) |
 | `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo Node skriptama CI-ja (YAML parser `yaml`); aplikacija ne koristi Node. |
@@ -55,6 +55,10 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 - Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu (na Windowsu skripta odbija rad, jer uspoređuje bajtove) i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
 - CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak dokazuje da `check` pada kad se izmijeni generirana datoteka i kad se izmijeni opis polja `health` u OpenAPI-ju. Posao preuzima tarball s github.com, pa ispad GitHuba ruši `ci-ok`.
+
+## Ugovorni vektori `health` (DAN-997)
+
+`tests/Ductura.Core.Tests/ContractVectorsTests.cs` provjerava klijent prema `health` vektorima lažnog servera iz izdanja `@ductura/test-fakes` zapisanog u `src/Ductura.Contracts/test-fakes.lock.json` (verzija, URL, sha256; URL mora biti točno onaj na GitHub Releases ductura/servera koji slijedi iz verzije). Test preuzme tarball bez tokena, pada ako se sha256 ne slaže s lockom, i svaki vektor rute `platform.health.get` šalje kroz `HealthProbe.ReadAsync` i `ClientVersion.Decide`. Očekivani ishodi su tablica u testu; vektor koji se pojavi ili nestane iz izdanja ruši test. Test traži mrežu, i lokalno i u poslu `build-test`, pa ispad github.com ruši `ci-ok`. Nova verzija test-fakes: promijeni sve tri vrijednosti u locku i po potrebi tablicu.
 
 ## Provjera verzije pri pokretanju (DAN-944)
 
