@@ -13,7 +13,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 
 | Mapa | Sadržaj |
 |---|---|
-| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`) |
+| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
@@ -55,6 +55,16 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 - Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu (na Windowsu skripta odbija rad, jer uspoređuje bajtove) i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
 - CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak dokazuje da `check` pada kad se izmijeni generirana datoteka i kad se izmijeni opis polja `health` u OpenAPI-ju. Posao preuzima tarball s github.com, pa ispad GitHuba ruši `ci-ok`.
+
+## Provjera verzije pri pokretanju (DAN-944)
+
+`ClientVersion.Decide` u `Ductura.Core` uspoređuje `minClientVersion` iz `health` sa svojom verzijom. Poziv `health` je `HealthProbe.ReadAsync` kroz ugovorni klijent (DAN-944-2a, vidi „Ugovorni klijent”); spajanje u prozor još nije napravljeno (944-2b). Paket je sada 0.1.0, a server šalje `minClientVersion` 1.0.0, pa spajanje čeka odluku o verziji (pitanje za vlasnika).
+
+| Ishod | Kada | Web |
+|---|---|---|
+| `UpdateRequired` | klijent je stariji od `minClientVersion`, ili vlastita verzija nije strogi `major.minor.patch` | ne otvara se; poruka „Ova verzija Ducture više nije podržana. Preuzmite i instalirajte noviju verziju.” |
+| `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se: web i preloader (D-300) prikazuju stanje servera; `minClientVersion` je savjet za nadogradnju, ne sigurnosna granica |
+| `Current` | klijent je jednak ili noviji, ili odgovor nema `minClientVersion` | otvara se |
 
 ## Pokretanje
 
