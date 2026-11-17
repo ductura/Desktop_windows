@@ -41,7 +41,36 @@ jobs:
       - name: Install the YAML parser (package-lock.json, no scripts)
         run: npm ci --ignore-scripts
       - name: ci-ok tests
-        run: node --test scripts/ci-ok.test.mjs
+        run: node --test scripts/ci-ok.test.mjs scripts/contract-client.test.mjs
+
+  # The C# contract client (DAN-958) must equal a fresh Kiota generation from
+  # the locked @ductura/contracts release; the last step proves the check can fail.
+  contract-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with: { dotnet-version: 8.0.x }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Restore Kiota (.config/dotnet-tools.json)
+        run: dotnet tool restore
+      - name: Generated code equals the locked OpenAPI
+        run: node scripts/contract-client.mjs check
+      - name: Generated code compiles
+        run: dotnet build src/Ductura.Contracts --configuration Release
+      - name: Self-test, a changed generated file fails the check
+        shell: bash
+        run: |
+          echo '// changed' >> src/Ductura.Contracts/Generated/DucturaApiClient.cs
+          if node scripts/contract-client.mjs check; then echo "::error::check passed on changed code"; exit 1; fi
+          git checkout -- src/Ductura.Contracts/Generated
 
   # Secret scan and dependency review are the shared ductura/.github
   # workflows (DAN-879), called by full SHA; there is no tag yet.
@@ -59,7 +88,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: ${{ always() }}
-    needs: [build-test, ci-ok-test, secret-scan, dependency-review]
+    needs: [build-test, ci-ok-test, contract-client, secret-scan, dependency-review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

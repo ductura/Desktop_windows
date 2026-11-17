@@ -55,7 +55,7 @@ Repo posjeduje i instalacijski paket, potpis paketa (ovisi o potpisu) i prvo pok
   - `scripts/ci-ok.test.mjs` (Node, samo za `ci-ok`).
 - Paket: Inno Setup (`installer/Ductura.iss`) gradi `dist/Ductura-Setup-x64.exe`. Paket **nije potpisan**, pa SmartScreen upozorava korisnika.
 - Adresa weba `https://ductura.org/app/` je zadana vrijednost dok se ne odluči V-0 (domena).
-- Još nema web paketa u ljusci, ugovornog klijenta, prijave tokom ni ažuriranja.
+- Ugovorni klijent (DAN-958) postoji samo za `health`, iz zaključanog izdanja `@ductura/contracts`, bez vektora; jezik C# je zatečeno stanje kostura (odluka 8 je otvorena). Još nema web paketa u ljusci, prijave tokom ni ažuriranja.
 
 ## 3. Sadržaj (PRIJEDLOG; ovisi o odluci 8)
 

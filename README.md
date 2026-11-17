@@ -15,10 +15,12 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 |---|---|
 | `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
+| `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit) |
 | `tests/functional` | Funkcionalni test instalacije |
+| `scripts/contract-client.mjs` | Generiranje i provjera ugovornog klijenta (`generate`, `check`) |
 | `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo tom testu (YAML parser `yaml`); aplikacija ne koristi Node. |
-| `.github/workflows/ci.yml` | Jedini workflow za PR: `build-test`, `ci-ok-test`, skeniranje tajni i pregled ovisnosti iz `ductura/.github` (puni SHA) i obvezna zbirna provjera `ci-ok`. Dozvola je samo `contents: read`. |
+| `.github/workflows/ci.yml` | Jedini workflow za PR: `build-test`, `ci-ok-test`, `contract-client`, skeniranje tajni i pregled ovisnosti iz `ductura/.github` (puni SHA) i obvezna zbirna provjera `ci-ok`. Dozvola je samo `contents: read`. |
 | `installer/Ductura.iss` | Inno Setup skripta → `dist/Ductura-Setup-x64.exe` |
 
 ## Adresa weba
@@ -46,6 +48,13 @@ Prozor s provjerenom adresom stvara kontrolu WebView2 i otvara adresu iz `WebAdd
 | Navigacija | Još nema pravila za navigaciju unutar prozora (DAN-960). |
 
 Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapiše `Ductura WebView2 <adresa>` (kod 0) kad WebView2 počne otvarati adresu, `Ductura poruka` (kod 1) kad adresa nije ispravna `Ductura bez WebView2` (kod 3) kad nema runtimea i `Ductura greška WebView2` (kod 4) kad se WebView2 ne pokrene iz drugog razloga. Ako u 90 sekundi nema ishoda, izlazi s kodom 2. U tom načinu navigacija se zaustavlja čim počne, pa test ne ovisi o mreži ni o serveru. Kod neispravne adrese test provjerava i da podatkovna mapa WebView2 nije nastala.
+
+## Ugovorni klijent (DAN-958)
+
+`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: verzija, URL tarballa na GitHub Releases ductura/servera (slijedi iz verzije) i njegov sha256. Generira se samo `/api/v1/health` (`platform.health.get`). Aplikacija klijent još ne koristi.
+
+- Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
+- CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak posla izmijeni jednu generiranu datoteku i provjerava da tada `check` pada.
 
 ## Pokretanje
 
