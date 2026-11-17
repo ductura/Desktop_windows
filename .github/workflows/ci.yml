@@ -24,8 +24,8 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: Ductura-Setup-x64, path: dist/Ductura-Setup-x64.exe }
 
-  # Tests of ci-ok itself (scripts/ci-ok.test.mjs) on Linux: the repository
-  # has no other Node tests, and build-test stays as it is (DAN-885).
+  # Node tests on Linux: ci-ok itself (DAN-885) and the contract client
+  # script (DAN-958); build-test stays as it is.
   ci-ok-test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -41,7 +41,43 @@ jobs:
       - name: Install the YAML parser (package-lock.json, no scripts)
         run: npm ci --ignore-scripts
       - name: ci-ok tests
-        run: node --test scripts/ci-ok.test.mjs
+        run: node --test scripts/ci-ok.test.mjs scripts/contract-client.test.mjs
+
+  # The C# contract client (DAN-958) must equal a fresh Kiota generation from
+  # the locked @ductura/contracts release (downloaded from github.com, so an
+  # outage there turns ci-ok red); the last step proves the check can fail.
+  contract-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with: { dotnet-version: 8.0.x }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Restore Kiota (.config/dotnet-tools.json)
+        run: dotnet tool restore
+      - name: Generated code equals the locked OpenAPI
+        run: node scripts/contract-client.mjs check
+      - name: Generated code compiles (packages.lock.json, warnings are errors)
+        run: |
+          dotnet restore src/Ductura.Contracts --locked-mode
+          dotnet build src/Ductura.Contracts --configuration Release --no-restore -warnaserror
+      - name: Self-test, a changed generated file or a changed contract fails the check
+        shell: bash
+        run: |
+          echo '// changed' >> src/Ductura.Contracts/Generated/DucturaApiClient.cs
+          if node scripts/contract-client.mjs check; then echo "::error::check passed on changed code"; exit 1; fi
+          git checkout -- src/Ductura.Contracts/Generated
+          v="$(jq -r .version src/Ductura.Contracts/contract-lock.json)"
+          curl -fsSL "https://github.com/ductura/server/releases/download/contracts-v$v/ductura-contracts-$v.tgz" | tar -xzO package/openapi/v1.json \
+            | jq '.paths["/api/v1/health"].get.responses["200"].content["application/json"].schema.properties.minClientVersion.description = "changed"' > "$RUNNER_TEMP/changed.json"
+          if node scripts/contract-client.mjs check "$RUNNER_TEMP/changed.json"; then echo "::error::check passed on a changed contract"; exit 1; fi
 
   # Secret scan and dependency review are the shared ductura/.github
   # workflows (DAN-879), called by full SHA; there is no tag yet.
@@ -59,7 +95,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: ${{ always() }}
-    needs: [build-test, ci-ok-test, secret-scan, dependency-review]
+    needs: [build-test, ci-ok-test, contract-client, secret-scan, dependency-review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
