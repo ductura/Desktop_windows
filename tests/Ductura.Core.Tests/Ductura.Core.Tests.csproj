@@ -13,6 +13,8 @@
   <ItemGroup>
     <!-- Locked @ductura/test-fakes release for ContractVectorsTests (DAN-997), next to the contract lock. -->
     <None Include="..\..\src\Ductura.Contracts\test-fakes.lock.json" Link="test-fakes.lock.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Locked @ductura/contracts release for WorkIdVectorsTests (DAN-1000). -->
+    <None Include="..\..\src\Ductura.Contracts\contract-lock.json" Link="contract-lock.json" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\Ductura.Core\Ductura.Core.csproj" />
   </ItemGroup>
 </Project>

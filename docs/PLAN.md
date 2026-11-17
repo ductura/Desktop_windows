@@ -55,7 +55,7 @@ Repo posjeduje i instalacijski paket, potpis paketa (ovisi o potpisu) i prvo pok
   - `scripts/ci-ok.test.mjs` (Node, samo za `ci-ok`).
 - Paket: Inno Setup (`installer/Ductura.iss`) gradi `dist/Ductura-Setup-x64.exe`. Paket **nije potpisan**, pa SmartScreen upozorava korisnika.
 - Adresa weba `https://ductura.org/app/` je zadana vrijednost dok se ne odluči V-0 (domena).
-- Ugovorni klijent (DAN-958) postoji samo za `health`, iz zaključanog izdanja `@ductura/contracts`, bez vektora; jezik C# je zatečeno stanje kostura (odluka 8 je otvorena). Još nema web paketa u ljusci, prijave tokom ni ažuriranja.
+- Ugovorni klijent (DAN-958) postoji samo za `health`, iz zaključanog izdanja `@ductura/contracts`; vektori ID-a rada iz istog izdanja prolaze kroz `LaunchOptions.Parse` u `build-test` (DAN-1000); jezik C# je zatečeno stanje kostura (odluka 8 je otvorena). Još nema web paketa u ljusci, prijave tokom ni ažuriranja.
 
 ## 3. Sadržaj (PRIJEDLOG; ovisi o odluci 8)
 
@@ -118,11 +118,11 @@ Koraci bez ID-a su PRIJEDLOG: ID dodjeljuje orkestrator.
   - `build-test` (`windows-latest`);
   - `ci-ok-test`;
   - `secret-scan` i `dependency-review` iz `ductura/.github`;
-  - `contract-client`: generirani klijent jednak je zaključanom ugovoru (DAN-958; vektori još ne);
+  - `contract-client`: generirani klijent jednak je zaključanom ugovoru (DAN-958); vektori ID-a rada iz istog izdanja vrte se u `build-test` (DAN-1000);
   - obvezni `ci-ok`.
 - **Kasnije:**
   - reusable `ci-dotnet` iz `ductura/.github` (ime vrijedi samo uz put A, ovisi o odluci 8);
-  - vektori ugovora u poslu `contract-client`;
+  - ostali vektori ugovora (izvan ID-a rada i `health`);
   - izdanje na oznaku `vX.Y.Z` kao potpisani paket u GitHub Releaseu (migracija §5; ovisi o potpisu).
 - **Risk (PRIJEDLOG):** `.github/**` je `critical`, kao u drugim repoima. Ostale putanje dodjeljuje tablica rizika.
 - **Vlasničke radnje:**
