@@ -55,7 +55,7 @@ Repo posjeduje i instalacijski paket, potpis paketa (ovisi o potpisu) i prvo pok
   - `scripts/ci-ok.test.mjs` (Node, samo za `ci-ok`).
 - Paket: Inno Setup (`installer/Ductura.iss`) gradi `dist/Ductura-Setup-x64.exe`. Paket **nije potpisan**, pa SmartScreen upozorava korisnika.
 - Adresa weba `https://ductura.org/app/` je zadana vrijednost dok se ne odluči V-0 (domena).
-- Još nema web paketa u ljusci, ugovornog klijenta, prijave tokom ni ažuriranja.
+- Ugovorni klijent (DAN-958) postoji samo za `health`, iz zaključanog izdanja `@ductura/contracts`, bez vektora; jezik C# je zatečeno stanje kostura (odluka 8 je otvorena). Još nema web paketa u ljusci, prijave tokom ni ažuriranja.
 
 ## 3. Sadržaj (PRIJEDLOG; ovisi o odluci 8)
 
@@ -109,7 +109,7 @@ Koraci bez ID-a su PRIJEDLOG: ID dodjeljuje orkestrator.
 | **Simulacija preuzimanja** | Pravi paket, SHA-256 jednak manifestu, preuzimanje samo na klik (migracija §6). Pokreće ga CI desktopa pri izdanju. |
 | **Sigurnost** | Nema tajni (`secret-scan`). Ljuska otvara samo provjerenu adresu. Prijava ide samo preko servera. |
 
-**Matrica:** `windows-latest` (x64) za izgradnju i funkcionalni test, `ubuntu-latest` samo za `ci-ok-test`.
+**Matrica:** `windows-latest` (x64) za izgradnju i funkcionalni test, `ubuntu-latest` za `ci-ok-test` i `contract-client`.
 **Prag „gotovo”:** `ci-ok` je zelen i ništa nije preskočeno. Funkcionalni test na čistom Windowsu prolazi.
 
 ## 7. CI i gate
@@ -118,10 +118,11 @@ Koraci bez ID-a su PRIJEDLOG: ID dodjeljuje orkestrator.
   - `build-test` (`windows-latest`);
   - `ci-ok-test`;
   - `secret-scan` i `dependency-review` iz `ductura/.github`;
+  - `contract-client`: generirani klijent jednak je zaključanom ugovoru (DAN-958; vektori još ne);
   - obvezni `ci-ok`.
 - **Kasnije:**
   - reusable `ci-dotnet` iz `ductura/.github` (ime vrijedi samo uz put A, ovisi o odluci 8);
-  - posao ugovora;
+  - vektori ugovora u poslu `contract-client`;
   - izdanje na oznaku `vX.Y.Z` kao potpisani paket u GitHub Releaseu (migracija §5; ovisi o potpisu).
 - **Risk (PRIJEDLOG):** `.github/**` je `critical`, kao u drugim repoima. Ostale putanje dodjeljuje tablica rizika.
 - **Vlasničke radnje:**
