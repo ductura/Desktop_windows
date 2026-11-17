@@ -5,6 +5,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <!-- Bundle's own dependencies are open ranges; packages.lock.json pins them (locked restore in CI). -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- The app publishes for win-x64 (DAN-944-2a); listing it keeps the lock file unchanged by that publish. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
   <ItemGroup>
     <!-- Runtime of the generated code (abstractions, HttpClient adapter, JSON). Stable release, at least two weeks old. -->

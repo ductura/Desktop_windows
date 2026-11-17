@@ -15,20 +15,29 @@ public sealed record HealthReading(bool Answered, string? MinClientVersion);
 public static class HealthProbe
 {
     /// <summary>
-    /// Nije odgovor: greška mreže, ne-2xx, prazno tijelo, tijelo koje nije JSON objekt, <c>status</c> različit od
-    /// <c>"ok"</c>, <c>minClientVersion</c> koji nije string ni null, istek roka. Dodatni ključevi se toleriraju
-    /// (budući minor ugovora smije dodati polje). Otkazivanje pozivatelja se ne guta nego baca.
+    /// Nije odgovor: svaka iznimka poziva (mreža, ne-2xx, tijelo koje nije JSON, druga vrsta sadržaja), prazno tijelo
+    /// (204, 3xx), tijelo koje nije JSON objekt, <c>status</c> različit od <c>"ok"</c>, <c>minClientVersion</c> koji nije
+    /// string ni null, istek roka. Svaki 2xx s ispravnim tijelom je odgovor. Dodatni ključevi se toleriraju (budući
+    /// minor ugovora smije dodati polje); kod ponovljenog ključa vrijedi zadnji, kao u JSON.parse.
+    /// Otkazivanje pozivatelja uvijek baca, bez obzira na vrstu iznimke.
     /// </summary>
     public static async Task<HealthReading> ReadAsync(
         HttpMessageHandler handler, Uri apiBase, TimeSpan limit, TimeProvider time, CancellationToken cancel)
     {
+        if (!apiBase.IsAbsoluteUri || apiBase.Scheme != Uri.UriSchemeHttps || apiBase.UserInfo.Length > 0
+            || apiBase.Query.Length > 0 || apiBase.Fragment.Length > 0)
+            throw new ArgumentException("API address must be absolute https without user, query or fragment.", nameof(apiBase));
+        if (limit <= TimeSpan.Zero || limit == Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Time limit must be positive and finite.");
+        cancel.ThrowIfCancellationRequested();
         using var deadline = new CancellationTokenSource(limit, time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancel, deadline.Token);
+        // The handler is the caller's (not disposed here); the given clock is the only time limit.
         using var http = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
         // A given HttpClient gets no Kiota middleware: no retries and no redirects beyond the handler's own.
         var adapter = new HttpClientRequestAdapter(new AnonymousAuthenticationProvider(), httpClient: http)
         {
-            BaseUrl = apiBase.ToString().TrimEnd('/'),
+            BaseUrl = apiBase.GetLeftPart(UriPartial.Path).TrimEnd('/'),
         };
         var request = new DucturaApiClient(adapter).Api.V1.Health.ToGetRequestInformation();
         try
@@ -40,9 +49,13 @@ public static class HealthProbe
             using var json = await JsonDocument.ParseAsync(body, cancellationToken: linked.Token);
             return Read(json.RootElement);
         }
-        catch (Exception e) when (e is not OperationCanceledException || !cancel.IsCancellationRequested)
+        catch (Exception) when (!cancel.IsCancellationRequested)
         {
             return NoAnswer;
+        }
+        catch (Exception)
+        {
+            throw new OperationCanceledException(cancel);
         }
     }
 
