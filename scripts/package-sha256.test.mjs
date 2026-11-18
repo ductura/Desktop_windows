@@ -2,24 +2,32 @@
 // package changes after the digest was written and passes on the untouched
 // package, and build-test uploads the package with a checked .sha256.
 // Run with node --test scripts/package-sha256.test.mjs from the repository root.
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { DEFAULT_PACKAGE, parseArgs } from './package-sha256.mjs';
+import { DEFAULT_PACKAGE, parseArgs, parseLine } from './package-sha256.mjs';
 
 const SCRIPT = fileURLToPath(new URL('package-sha256.mjs', import.meta.url));
 const NAME = 'Ductura-Setup-x64.exe';
-const cli = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' }).status;
+// Exit code of the script; a failure must say why on stderr.
+const cli = (...args) => {
+  const r = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
+  if (r.status !== 0) assert.match(r.stderr, r.status === 2 ? /^usage: / : /^::error::\S/);
+  return r.status;
+};
+const dirs = [];
+const tempDir = () => { dirs.push(mkdtempSync(join(tmpdir(), 'pkg-sha-'))); return dirs.at(-1); };
+after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 // A fresh folder with a deterministic 1 MiB package and its written digest.
 function written(bytes = Buffer.from(Array.from({ length: 1 << 20 }, (_, i) => (i * 31 + 7) & 0xff))) {
-  const pkg = join(mkdtempSync(join(tmpdir(), 'pkg-sha-')), NAME);
+  const pkg = join(tempDir(), NAME);
   writeFileSync(pkg, bytes);
   assert.equal(cli(pkg), 0);
   return pkg;
@@ -34,6 +42,12 @@ const CHANGES = [
   ['last byte removed', (b) => b.subarray(0, b.length - 1)],
   ['other content of the same length', (b) => Buffer.alloc(b.length, 0x5a)],
 ];
+test('--verify fails on a well-formed .sha256 whose last hex digit differs', () => {
+  const pkg = written();
+  const line = readFileSync(`${pkg}.sha256`, 'utf8');
+  writeFileSync(`${pkg}.sha256`, `${line.slice(0, 63)}${line[63] === '0' ? '1' : '0'}${line.slice(64)}`);
+  assert.equal(cli('--verify', pkg), 1);
+});
 for (const [name, change] of CHANGES) {
   test(`--verify fails when the package changes after the digest: ${name}`, () => {
     const pkg = written();
@@ -73,8 +87,11 @@ const BAD_LINES = [
   ['empty file', ''],
   ['invalid UTF-8', Buffer.concat([Buffer.from(`${HEX}  `), Buffer.from([0xc3, 0x28]), Buffer.from('\n')])],
 ];
+// The parser itself refuses each line, not only the digest comparison after it.
+const REASON = { 'invalid UTF-8': /not UTF-8/, 'three spaces': /names/, 'name with a folder': /names/, 'Windows path': /names/, 'parent folder': /names/, 'other letter case': /names/, 'other name': /names/, 'NUL in the name': /names/, 'DEL': /names/, 'trailing space': /names/ };
 for (const [name, line] of BAD_LINES) {
   test(`--verify refuses the .sha256 of an empty package: ${name}`, () => {
+    assert.throws(() => parseLine(Buffer.from(line), NAME), REASON[name] ?? /not one line/);
     const pkg = written(Buffer.alloc(0));
     writeFileSync(`${pkg}.sha256`, line);
     assert.equal(cli('--verify', pkg), 1);
@@ -82,7 +99,7 @@ for (const [name, line] of BAD_LINES) {
 }
 
 test('--verify fails without the .sha256, without the package, or on a folder', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'pkg-sha-'));
+  const dir = tempDir();
   const pkg = join(dir, NAME);
   writeFileSync(pkg, 'x');
   assert.equal(cli('--verify', pkg), 1);
@@ -133,6 +150,8 @@ const load = () => {
   return doc.toJS({ maxAliasCount: 100 });
 };
 const PKG = 'dist/Ductura-Setup-x64.exe';
+const UPLOAD = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02';
+const NODE_TEST = 'node --test scripts/ci-ok.test.mjs scripts/contract-client.test.mjs scripts/package-sha256.test.mjs';
 const lines = (s) => (typeof s === 'string' ? s.split('\n').map((l) => l.trim()).filter(Boolean) : []);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -150,13 +169,18 @@ function packageProblems(wf) {
     find('functional test', (s) => typeof s.run === 'string' && s.run.includes('Install-And-Launch.ps1')),
     find('verify', (s) => same(lines(s.run), [`node scripts/package-sha256.mjs --verify ${PKG}`])),
     find('sha256sum', (s) => same(lines(s.run), ['cd dist && sha256sum -c Ductura-Setup-x64.exe.sha256'])),
-    find('upload', (s) => typeof s.uses === 'string' && s.uses.startsWith('actions/upload-artifact@')),
+    find('upload', (s) => s.uses === UPLOAD),
   ];
   const problems = order.filter((i) => typeof i === 'string');
   if (problems.length > 0) return problems;
-  if (!order.every((i, k) => k === 0 || i > order[k - 1])) problems.push(`order ${order}`);
+  // Inno Setup, write, functional test, verify, sha256sum and upload are
+  // adjacent and last, so nothing can change or rehash the package in between.
+  if (!order.every((i, k) => k === 0 || i === order[k - 1] + 1) || order.at(-1) !== steps.length - 1) problems.push(`steps ${order} are not adjacent and last`);
   const [, write, , verify, sum, upload] = order;
-  if (sum !== verify + 1 || upload !== sum + 1 || upload !== steps.length - 1) problems.push('verify, sha256sum and upload are not the last three steps');
+  const job = wf.jobs['build-test'];
+  if (Object.hasOwn(wf, 'defaults')) problems.push('workflow has defaults');
+  for (const key of Object.keys(job)) if (!['runs-on', 'steps'].includes(key)) problems.push(`build-test has ${key}`);
+  if (job['runs-on'] !== 'windows-latest') problems.push('build-test does not run on windows-latest');
   for (const i of [write, verify, sum]) {
     for (const key of Object.keys(steps[i])) if (!['name', 'run', ...(i === sum ? ['shell'] : [])].includes(key)) problems.push(`step ${i} has ${key}`);
   }
@@ -164,7 +188,8 @@ function packageProblems(wf) {
   const w = steps[upload].with ?? {};
   if (w.name !== 'Ductura-Setup-x64' || !same(lines(w.path).sort(), [PKG, `${PKG}.sha256`])) problems.push('upload is not the package and its .sha256');
   if (!Object.keys(steps[upload]).every((k) => ['uses', 'with'].includes(k))) problems.push('upload step has more than uses and with');
-  if (!lines(wf.jobs['ci-ok-test'].steps.at(-1)?.run).some((l) => l.startsWith('node --test ') && l.includes('scripts/package-sha256.test.mjs'))) problems.push('ci-ok-test does not run this test');
+  const tests = wf.jobs['ci-ok-test'].steps.at(-1);
+  if (!same(Object.keys(tests ?? {}), ['name', 'run']) || !same(lines(tests.run), [NODE_TEST])) problems.push('ci-ok-test does not run this test as its last step');
   return problems;
 }
 
@@ -186,11 +211,20 @@ const BROKEN = [
   ['if on the sha256sum step', (s) => { s.find((x) => String(x.run).includes('sha256sum')).if = 'false'; }],
   ['exit code swallowed', (s) => { s.find((x) => String(x.run).includes('--verify')).run += '\nexit 0'; }],
   ['a step after the upload', (s) => { s.push({ run: 'echo' }); }],
+  ['a rehash after the functional test', (s) => { s.splice(s.findIndex((x) => String(x.run).includes('--verify')), 0, { run: `node scripts\\package-sha256.mjs ${PKG}` }); }],
+  ['a step between Inno Setup and the write', (s) => { s.splice(s.findIndex((x) => String(x.run).includes('node --version')), 0, { run: 'echo' }); }],
+  ['upload by tag', (s) => { s.at(-1).uses = 'actions/upload-artifact@v4'; }],
+  ['workflow defaults', (s, wf) => { wf.defaults = { run: { shell: 'pwsh -command ". \'{0}\'; exit 0"' } }; }],
+  ['job defaults', (s, wf) => { wf.jobs['build-test'].defaults = { run: { shell: 'bash' } }; }],
+  ['job continue-on-error', (s, wf) => { wf.jobs['build-test']['continue-on-error'] = true; }],
+  ['job on Linux', (s, wf) => { wf.jobs['build-test']['runs-on'] = 'ubuntu-latest'; }],
+  ['ci-ok-test swallows the result', (s, wf) => { wf.jobs['ci-ok-test'].steps.at(-1).run = `${NODE_TEST} || true`; }],
+  ['ci-ok-test continue-on-error', (s, wf) => { wf.jobs['ci-ok-test'].steps.at(-1)['continue-on-error'] = true; }],
 ];
 for (const [name, mutate] of BROKEN) {
   test(`package step check fails: ${name}`, () => {
     const wf = load();
-    mutate(wf.jobs['build-test'].steps);
+    mutate(wf.jobs['build-test'].steps, wf);
     assert.notDeepEqual(packageProblems(wf), []);
   });
 }
