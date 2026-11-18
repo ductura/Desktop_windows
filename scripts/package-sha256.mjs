@@ -5,9 +5,9 @@
 // line in the sha256sum text form: 64 lower-case hex, two spaces, the file name
 // without a folder, LF; anything else fails the check. Exit 0 when written or
 // matching, 1 on a failed check or a missing file, 2 on wrong arguments.
-import { createHash } from 'node:crypto';
-import { createReadStream, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { createHash, randomBytes } from 'node:crypto';
+import { createReadStream, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_PACKAGE = 'dist/Ductura-Setup-x64.exe';
@@ -48,11 +48,23 @@ export function parseLine(bytes, name) {
 
 // Writes only a line that --verify reads back as the same name, so a name with
 // a line break (LF, CR, U+2028, U+2029) or other unreadable text is refused.
-export async function writeDigest(path) {
+// It never writes through an existing path: the line goes to a new file with a
+// random name opened exclusively (wx fails on any existing entry, links too),
+// which is then renamed onto <package>.sha256, replacing a link instead of
+// following it. `random` is replaceable only so a test can name the file.
+export async function writeDigest(path, random = () => randomBytes(16).toString('hex')) {
   const hex = await sha256File(path);
   const line = `${hex}  ${basename(path)}\n`;
   parseLine(Buffer.from(line), basename(path));
-  writeFileSync(`${path}.sha256`, line);
+  const target = `${path}.sha256`;
+  const tmp = join(dirname(target), `.${basename(target)}.${random()}.tmp`);
+  writeFileSync(tmp, line, { flag: 'wx' });
+  try {
+    renameSync(tmp, target);
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    throw error;
+  }
   return hex;
 }
 
@@ -70,7 +82,7 @@ async function main(argv) {
     return 2;
   }
   try {
-    const hex = await (args.verify ? verify : writeDigest)(args.file);
+    const hex = await (args.verify ? verify(args.file) : writeDigest(args.file));
     console.log(`${args.verify ? 'verified' : 'wrote'} ${hex}  ${basename(args.file)}`);
     return 0;
   } catch (error) {

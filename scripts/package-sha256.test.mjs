@@ -6,12 +6,12 @@ import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { DEFAULT_PACKAGE, parseArgs, parseLine } from './package-sha256.mjs';
+import { DEFAULT_PACKAGE, parseArgs, parseLine, writeDigest } from './package-sha256.mjs';
 
 const SCRIPT = fileURLToPath(new URL('package-sha256.mjs', import.meta.url));
 const NAME = 'Ductura-Setup-x64.exe';
@@ -142,6 +142,61 @@ test('without a path the script writes and checks dist/Ductura-Setup-x64.exe', (
   assert.equal(run('--verify'), 0);
   writeFileSync(pkg, 'abd');
   assert.equal(run('--verify'), 1);
+});
+
+// The write never goes through an existing path: a new file with a random name
+// is opened exclusively (wx) and renamed onto <package>.sha256, so a link there
+// is replaced, not followed, and the package and any other file stay as they are.
+test('writing replaces a .sha256 that is a hard link to the package and leaves the package as it was', () => {
+  const pkg = join(tempDir(), NAME);
+  writeFileSync(pkg, 'abc');
+  linkSync(pkg, `${pkg}.sha256`);
+  assert.equal(cli(pkg), 0);
+  assert.equal(readFileSync(pkg, 'utf8'), 'abc');
+  assert.equal(cli('--verify', pkg), 0);
+});
+
+test('writing replaces a .sha256 that is a symbolic link and leaves its target as it was', () => {
+  const dir = tempDir();
+  const pkg = join(dir, NAME);
+  writeFileSync(pkg, 'abc');
+  writeFileSync(join(dir, 'other'), 'other');
+  for (const target of [pkg, join(dir, 'other'), join(dir, 'missing')]) {
+    rmSync(`${pkg}.sha256`, { force: true });
+    symlinkSync(target, `${pkg}.sha256`);
+    assert.equal(cli(pkg), 0, target);
+    assert.equal(readFileSync(pkg, 'utf8'), 'abc');
+    assert.equal(readFileSync(join(dir, 'other'), 'utf8'), 'other');
+    assert.throws(() => readFileSync(join(dir, 'missing')));
+    assert.equal(cli('--verify', pkg), 0, target);
+  }
+  assert.deepEqual(readdirSync(dir).sort(), [NAME, `${NAME}.sha256`, 'other'].sort());
+});
+
+test('writing fails when the temporary path already exists and changes nothing there', async () => {
+  const dir = tempDir();
+  const pkg = join(dir, NAME);
+  writeFileSync(pkg, 'abc');
+  const tmp = join(dir, `.${NAME}.sha256.fixed.tmp`);
+  for (const make of [() => linkSync(pkg, tmp), () => symlinkSync(pkg, tmp), () => writeFileSync(tmp, 'old')]) {
+    rmSync(tmp, { force: true });
+    make();
+    await assert.rejects(writeDigest(pkg, () => 'fixed'), { code: 'EEXIST' });
+    assert.equal(readFileSync(pkg, 'utf8'), 'abc');
+    assert.throws(() => readFileSync(`${pkg}.sha256`));
+  }
+  assert.equal(readFileSync(tmp, 'utf8'), 'old');
+});
+
+test('a failed rename leaves no temporary file', () => {
+  const dir = tempDir();
+  const pkg = join(dir, NAME);
+  writeFileSync(pkg, 'abc');
+  mkdirSync(`${pkg}.sha256`);
+  writeFileSync(join(`${pkg}.sha256`, 'x'), '');
+  assert.equal(cli(pkg), 1);
+  assert.equal(readFileSync(pkg, 'utf8'), 'abc');
+  assert.deepEqual(readdirSync(dir).sort(), [NAME, `${NAME}.sha256`].sort());
 });
 
 // A valid .sha256 stays, so only the check of the package itself can fail.
