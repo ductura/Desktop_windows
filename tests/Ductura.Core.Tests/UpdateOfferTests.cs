@@ -174,6 +174,8 @@ public class UpdateOfferTests
     [InlineData("https://preuzimanje.example.invalid/ductura.msi?v=1.0.0&kanal=stabilni")]
     [InlineData("https://preuzimanje.example.invalid/%7Eductura/%41.msi?x=%2F")]
     [InlineData("https://preuzimanje.example.invalid/a//b/c.msi")]
+    [InlineData("https://preuzimanje.example.invalid/ductura.msi?")]
+    [InlineData("https://preuzimanje.example.invalid/ductura/")]
     public void Adresa_retka_vraca_se_doslovno(string url)
     {
         foreach (var (architecture, rowUrl, sha) in new[] { ("x64", X64Url, D), ("arm64", Arm64Url, new string('c', 64)) })
@@ -183,6 +185,12 @@ public class UpdateOfferTests
             Assert.Equal(new PackageOffer("1.0.0", url, sha), UpdateOffer.Decide(200, body, "0.9.0", architecture));
         }
     }
+
+    // "Verbatim" is the decoded JSON string: escapes in the manifest text do not reach the offer.
+    [Fact]
+    public void Adresa_s_json_izlazom_vraca_dekodiranu_vrijednost() =>
+        Assert.Equal(new PackageOffer("1.0.0", "/preuzimanje/ductura.msi?v=1", D),
+            Ready("\"url\":\"{U}\"", "\"url\":\"\\/preuzimanje\\/ductura.msi\\u003Fv=1\""));
 
     [Theory]
     [MemberData(nameof(Expected))]
