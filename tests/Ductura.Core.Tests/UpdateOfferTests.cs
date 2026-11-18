@@ -215,7 +215,7 @@ public class UpdateOfferTests
     public void Status_ili_tijelo_izvan_ugovora_ne_daje_ponudu(int status, string? body) =>
         Assert.Null(UpdateOffer.Decide(status, body == "valid" ? Manifest : body, "0.9.0", "x64"));
 
-    // Version.TryParse in Packaging.IsNewer reads "1.0" as older than "1.0.0", so the installed version is checked first.
+    // The comparison relies on the strict major.minor.patch form, so the installed version is checked first.
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -241,12 +241,33 @@ public class UpdateOfferTests
     public void Nepoznata_arhitektura_u_pozivu_baca(string? architecture) =>
         Assert.Throws<ArgumentOutOfRangeException>(() => UpdateOffer.Decide(200, Manifest, "0.9.0", architecture!));
 
-    // A version past int is valid in the contract: the manifest stands, only that row is never newer (Packaging.IsNewer).
-    [Fact]
-    public void Verzija_preko_int_ne_rusi_manifest()
+    // Versions past int are valid in the contract and compare as numbers, component by component (review c.6971454855).
+    [Theory]
+    [InlineData("99999999999.0.0", "0.9.0", true)]
+    [InlineData("1.0.99999999999", "1.0.0", true)]
+    [InlineData("1.99999999999.0", "1.9.99999999999", true)]
+    [InlineData("100000000000.0.0", "99999999999.0.0", true)]
+    [InlineData("1234567890123456789012345678901234567890.0.0", "1234567890123456789012345678901234567889.9.9", true)]
+    [InlineData("1.10.0", "1.9.0", true)]
+    [InlineData("1.0.10", "1.0.9", true)]
+    [InlineData("10.0.0", "9.99.99", true)]
+    [InlineData("99999999999.0.0", "99999999999.0.0", false)]
+    [InlineData("1.0.0", "99999999999.0.0", false)]
+    [InlineData("1.0.0", "1.0.99999999999", false)]
+    [InlineData("99999999999.0.0", "100000000000.0.0", false)]
+    [InlineData("1.9.0", "1.10.0", false)]
+    public void Verzija_preko_int_usporeduje_se_brojcano(string offered, string installed, bool offer)
     {
-        Assert.Null(Changed("\"version\":\"1.0.0\",\"url\":\"{U}\"", "\"version\":\"99999999999.0.0\",\"url\":\"{U}\""));
+        foreach (var (arch, url, sha) in new[] { ("x64", U, D), ("arm64", ArmUrl, C) })
+            foreach (var body in Orders(arch))
+            {
+                var (find, replace) = ($"\"version\":\"1.0.0\",\"url\":\"{url}\"", $"\"version\":\"{offered}\",\"url\":\"{url}\"");
+                Assert.Contains(find, body);
+                Assert.Equal(offer ? new PackageOffer(offered, url, sha) : null,
+                    UpdateOffer.Decide(200, body.Replace(find, replace), installed, arch));
+            }
+        // Another pair past int leaves the manifest valid and does not change the offer.
         Assert.Equal(new PackageOffer("1.0.0", U, D), Changed("\"version\":\"1.0.0\",\"url\":\"/preuzimanje/m.dmg\"",
-            "\"version\":\"99999999999.0.0\",\"url\":\"/preuzimanje/m.dmg\""));
+            $"\"version\":\"{offered}\",\"url\":\"/preuzimanje/m.dmg\""));
     }
 }

@@ -16,7 +16,7 @@ public static partial class UpdateOffer
 
     /// <summary>
     /// Redak <c>windows</c> za <paramref name="architecture"/> kad je njegova verzija novija od instalirane
-    /// (<see cref="Packaging.IsNewer"/>); inače null. Status različit od 200 i tijelo izvan ugovora (višak, manjak ili dupli
+    /// (brojčano, i preko raspona <c>int</c>); inače null. Status različit od 200 i tijelo izvan ugovora (višak, manjak ili dupli
     /// ključ, krivi tip, vrijednost izvan uzorka, par sustav/arhitektura dvaput) ne nude ništa, ma u kojem retku bila greška.
     /// Instalirana verzija mora biti strogi major.minor.patch, jer <c>Version.TryParse</c> prima i "1.0" i " 1.0.0".
     /// </summary>
@@ -29,7 +29,19 @@ public static partial class UpdateOffer
         // ArgumentException: a lone surrogate in body cannot be transcoded to UTF-8; architecture is checked above.
         try { rows = Read(body, architecture); }
         catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException or RegexMatchTimeoutException) { return null; }
-        return rows is [var row] && Packaging.IsNewer(row.Version, installedVersion) ? row : null;
+        return rows is [var row] && IsNewer(row.Version, installedVersion) ? row : null;
+    }
+
+    // Both versions match VersionPattern (ASCII digits, no leading zeros), so a longer component is the larger number and
+    // equal lengths compare ordinally. Version.TryParse (Packaging.IsNewer) rejects components past int.
+    private static bool IsNewer(string offered, string installed)
+    {
+        foreach (var (o, i) in offered.Split('.').Zip(installed.Split('.')))
+        {
+            var c = o.Length != i.Length ? o.Length.CompareTo(i.Length) : string.CompareOrdinal(o, i);
+            if (c != 0) return c > 0;
+        }
+        return false;
     }
 
     // Windows rows for the architecture, or null when the body is outside the contract. Keys are walked with TryAdd
