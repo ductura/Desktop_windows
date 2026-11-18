@@ -113,6 +113,20 @@ test('--verify fails without the .sha256, without the package, or on a folder', 
   assert.throws(() => readFileSync(join(dir, 'missing.exe.sha256')));
 });
 
+test('writing refuses a name that --verify could not read back', () => {
+  const dir = tempDir();
+  for (const name of ['a\u2028b.exe', 'a\u2029b.exe', 'a\nb.exe', 'a\rb.exe', 'a.exe\r']) {
+    const pkg = join(dir, name);
+    writeFileSync(pkg, 'x');
+    assert.equal(cli(pkg), 1, JSON.stringify(name));
+    assert.throws(() => readFileSync(`${pkg}.sha256`), JSON.stringify(name));
+  }
+  const fine = join(dir, 'Ductura Setup šđčćž.exe');
+  writeFileSync(fine, 'x');
+  assert.equal(cli(fine), 0);
+  assert.equal(cli('--verify', fine), 0);
+});
+
 // A valid .sha256 stays, so only the check of the package itself can fail.
 test('--verify fails when the package is gone or a folder next to a valid .sha256', () => {
   const gone = written();

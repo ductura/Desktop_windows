@@ -46,9 +46,13 @@ export function parseLine(bytes, name) {
   return match[1];
 }
 
+// Writes only a line that --verify reads back as the same name, so a name with
+// a line break (LF, CR, U+2028, U+2029) or other unreadable text is refused.
 export async function writeDigest(path) {
   const hex = await sha256File(path);
-  writeFileSync(`${path}.sha256`, `${hex}  ${basename(path)}\n`);
+  const line = `${hex}  ${basename(path)}\n`;
+  parseLine(Buffer.from(line), basename(path));
+  writeFileSync(`${path}.sha256`, line);
   return hex;
 }
 
