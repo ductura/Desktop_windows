@@ -45,6 +45,18 @@ public class UpdateOfferTests
         Assert.Equal(new PackageOffer("1.0.0", U, D), UpdateOffer.Decide(200, reordered, "0.9.0", "x64"));
     }
 
+    // A valid manifest with newer packages only for other pairs offers nothing (review c.6970831101, t. 1).
+    [Theory]
+    [InlineData("x64", 2, 3, "arm64")]
+    [InlineData("arm64", 1, 4, "x64")]
+    public void Bez_retka_za_arhitekturu_nema_ponude(string arch, int macosRow, int windowsRow, string other)
+    {
+        var lines = Manifest.Split('\n');
+        var body = lines[0] + lines[macosRow].TrimEnd(',') + "," + lines[windowsRow].TrimEnd(',', ']', '}') + "}]}";
+        Assert.NotNull(UpdateOffer.Decide(200, body, "0.9.0", other)); // the body itself is valid and offers the other row
+        Assert.Null(UpdateOffer.Decide(200, body, "0.9.0", arch));
+    }
+
     // The url goes into the offer verbatim (decoded JSON string): relative, absolute, query, escapes, 2048 characters.
     [Theory]
     [InlineData("/preuzimanje/ductura.msi")]
@@ -108,6 +120,30 @@ public class UpdateOfferTests
     [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/../a.msi\"")]
     [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/%2e%2e/a.msi\"")]
     [InlineData("\"url\":\"{U}\"", "\"url\":\"\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/paket%00.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/a%2Eb.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/./a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/.\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/..\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/..?v=1\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/.?v=1\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/?v=1\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://dl.example.invalid//a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://dl.example.invalid/?v=1\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://xn--dl-0ka.example.invalid/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://dl.xn--p1ai/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://dl.xn--d1a.example.invalid/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://1.2.3.4/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://dl_x.example.invalid/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://-dl.example.invalid/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://dl.example.invalid./a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.invalid/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.invalid/a.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/a b.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/a%zz.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/a%0.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/a<b>.msi\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/preuzimanje/a\\\\b.msi\"")]
     [InlineData("\"system\":\"windows\",\"architecture\":\"x64\"", "\"system\":\"Windows\",\"architecture\":\"x64\"")]
     [InlineData("\"system\":\"windows\",\"architecture\":\"x64\"", "\"system\":\"windows\",\"architecture\":\"ia32\"")]
     [InlineData("\"system\":\"macos\",\"architecture\":\"arm64\"", "\"system\":\"linux\",\"architecture\":\"arm64\"")]
