@@ -15,8 +15,6 @@
     <None Include="..\..\src\Ductura.Contracts\test-fakes.lock.json" Link="test-fakes.lock.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Locked @ductura/contracts release for WorkIdVectorsTests (DAN-1000). -->
     <None Include="..\..\src\Ductura.Contracts\contract-lock.json" Link="contract-lock.json" CopyToOutputDirectory="PreserveNewest" />
-    <!-- downloads.manifest.get vectors vendored from ductura/server at a pinned commit (DAN-1072). -->
-    <None Include="vendor\downloads-manifest.vectors.json" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\Ductura.Core\Ductura.Core.csproj" />
   </ItemGroup>
 </Project>

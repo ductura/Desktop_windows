@@ -1,34 +1,34 @@
-using System.Text.Json;
 using Ductura.Core;
 using Xunit;
 
 namespace Ductura.Core.Tests;
 
 /// <summary>
-/// Update offer (DAN-1072) against the <c>downloads.manifest.get</c> vectors. No test-fakes release carries the route yet
-/// (3.0.1 predates DAN-931), so the three vectors are vendored from <see cref="Source"/> at a pinned commit and
-/// <see cref="Kopija_vektora_odgovara_izvoru"/> fails when the copy differs from that commit.
+/// Update offer (DAN-1072-1) against manifests in the shape of <c>downloads.manifest.get</c>: <see cref="Contract"/>
+/// (<c>openapi/v1.json</c>, path <c>/api/v1/downloads/manifest</c>, 200 body). The route's vectors from a locked
+/// test-fakes release are 1072-2.
 /// </summary>
-public class UpdateOfferVectorsTests
+public class UpdateOfferTests
 {
-    public const string Source = "https://raw.githubusercontent.com/ductura/server/6f7a594edc8dabf969e6aaada5cbaa7c41c685a1/server/contracts/generated/fake-server/vectors.json";
-    private const string Route = "downloads.manifest.get";
+    public const string Contract = "ductura/server@6f7a594edc8dabf969e6aaada5cbaa7c41c685a1:openapi/v1.json";
     private const string X64Url = "https://preuzimanje.example.invalid/ductura/1.0.0/ductura-windows-x64.msi";
+    private const string Arm64Url = "https://preuzimanje.example.invalid/ductura/1.0.0/ductura-windows-arm64.msi";
     private static readonly string D = new('d', 64);
 
-    private static Dictionary<string, JsonElement> Vectors(string json) =>
-        JsonDocument.Parse(json).RootElement.EnumerateArray()
-            .Where(v => v.GetProperty("route").GetString() == Route)
-            .ToDictionary(v => v.GetProperty("name").GetString()!, v => v.Clone(), StringComparer.Ordinal);
+    // Synthetic manifest: one row per system and architecture, relative and absolute addresses (D-306 t. 1).
+    private static readonly string Manifest = $$"""
+        {"packages":[
+        {"system":"macos","architecture":"arm64","version":"1.0.0","url":"https://preuzimanje.example.invalid/ductura/1.0.0/ductura-macos-arm64.dmg","sha256":"{{new string('a', 64)}}"},
+        {"system":"macos","architecture":"x64","version":"1.0.0","url":"/preuzimanje/ductura/1.0.0/ductura-macos-x64.dmg","sha256":"{{new string('b', 64)}}"},
+        {"system":"windows","architecture":"arm64","version":"1.0.0","url":"{{Arm64Url}}","sha256":"{{new string('c', 64)}}"},
+        {"system":"windows","architecture":"x64","version":"1.0.0","url":"{{X64Url}}","sha256":"{{D}}"}]}
+        """;
 
-    private static readonly Dictionary<string, JsonElement> Vendored =
-        Vectors(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "vendor", "downloads-manifest.vectors.json")));
-
-    private static string Body(string name) => Vendored[name].GetProperty("response").GetProperty("body").GetRawText();
+    private static string Body(string name) => name switch { "ready" => Manifest, "ready-empty" => """{"packages":[]}""", _ => throw new ArgumentException(name) };
 
     private static PackageOffer? Ready(string find, string replace, string installed = "0.9.0")
     {
-        var body = Body("ready");
+        var body = Manifest;
         find = find.Replace("{D}", D).Replace("{U}", X64Url);
         Assert.Contains(find, body); // a mutation that does not apply would pass vacuously
         return UpdateOffer.Decide(200, body.Replace(find, replace.Replace("{D}", D).Replace("{U}", X64Url)), installed, "x64");
@@ -131,37 +131,19 @@ public class UpdateOfferVectorsTests
             "\"version\":\"99999999999.0.0\",\"url\":\"https://preuzimanje.example.invalid/ductura/1.0.0/ductura-macos-arm64.dmg\""));
     }
 
-    // Expected outcome per vector: installed version and architecture, then the offered version, url and sha256 (or none).
-    public static TheoryData<string, string, string, string?, string?, string?> Expected => new()
+    // Expected outcome: status, body, installed version and architecture, then the offered version, url and sha256 (or none).
+    public static TheoryData<int, string, string, string, string?, string?, string?> Expected => new()
     {
-        { "ready", "0.9.0", "x64", "1.0.0", X64Url, D },
-        { "ready", "0.9.0", "arm64", "1.0.0", "https://preuzimanje.example.invalid/ductura/1.0.0/ductura-windows-arm64.msi", new string('c', 64) },
-        { "ready", "1.0.0", "x64", null, null, null },
-        { "ready", "1.0.1", "x64", null, null, null },
-        { "ready-empty", "0.9.0", "x64", null, null, null },
-        { "unavailable", "0.9.0", "x64", null, null, null },
+        { 200, "ready", "0.9.0", "x64", "1.0.0", X64Url, D },
+        { 200, "ready", "0.9.0", "arm64", "1.0.0", Arm64Url, new string('c', 64) },
+        { 200, "ready", "1.0.0", "x64", null, null, null },
+        { 200, "ready", "1.0.1", "x64", null, null, null },
+        { 200, "ready-empty", "0.9.0", "x64", null, null, null },
+        { 503, "ready", "0.9.0", "x64", null, null, null },
     };
 
     [Theory]
     [MemberData(nameof(Expected))]
-    public void Svaki_vektor_ima_ocekivan_ishod(string name, string installed, string architecture, string? version, string? url, string? sha)
-    {
-        var response = Vendored[name].GetProperty("response");
-        var offer = UpdateOffer.Decide(response.GetProperty("status").GetInt32(), response.GetProperty("body").GetRawText(), installed, architecture);
-        Assert.Equal(version is null ? null : new PackageOffer(version, url!, sha!), offer);
-    }
-
-    [Fact]
-    public void Tablica_pokriva_sve_vektore() =>
-        Assert.Equal(Expected.Select(row => (string)row[0]).Distinct().Order(StringComparer.Ordinal), Vendored.Keys.Order(StringComparer.Ordinal));
-
-    [Fact]
-    public async Task Kopija_vektora_odgovara_izvoru()
-    {
-        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        var source = Vectors(await http.GetStringAsync(Source));
-        Assert.Equal(source.Keys.Order(StringComparer.Ordinal), Vendored.Keys.Order(StringComparer.Ordinal));
-        foreach (var (name, vector) in source)
-            Assert.Equal(JsonSerializer.Serialize(vector), JsonSerializer.Serialize(Vendored[name]));
-    }
+    public void Manifest_daje_ocekivan_ishod(int status, string body, string installed, string architecture, string? version, string? url, string? sha) =>
+        Assert.Equal(version is null ? null : new PackageOffer(version, url!, sha!), UpdateOffer.Decide(status, Body(body), installed, architecture));
 }

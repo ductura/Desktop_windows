@@ -16,7 +16,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 | `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`, ponuda novije verzije iz manifesta preuzimanja `UpdateOffer.Decide`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
-| `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit), ugovornih vektora `health` (DAN-997) i vektora ID-a rada (DAN-1000) i vektora manifesta preuzimanja (DAN-1072) |
+| `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit), ugovornih vektora `health` (DAN-997) i vektora ID-a rada (DAN-1000) i ponude novije verzije (DAN-1072) |
 | `tests/functional` | Funkcionalni test instalacije |
 | `scripts/contract-client.mjs` | Generiranje i provjera ugovornog klijenta (`generate`, `check`) |
 | `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo Node skriptama CI-ja (YAML parser `yaml`); aplikacija ne koristi Node. |
@@ -68,7 +68,7 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 `UpdateOffer.Decide` u `Ductura.Core` iz odgovora `downloads.manifest.get` (S-1H.5) bira redak `windows` za zadanu arhitekturu (`x64` ili `arm64`) i nudi ga samo kad je verzija novija od instalirane (`Packaging.IsNewer`). Status različit od 200 i tijelo izvan ugovora ne nude ništa, čak i kad je greška u retku za macOS. Instalirana verzija mora biti strogi `major.minor.patch`. Adresa se vraća doslovno. Nema mreže, preuzimanja ni prikaza. Otvoreno: manifest navodi `.msi`, a paket je `Ductura-Setup-x64.exe` (odluka 12, DAN-932).
 
-Nijedno izdanje `@ductura/test-fakes` još nema tu rutu (3.0.1 je stariji od DAN-931). Zato su njezina tri vektora kopirana u `tests/Ductura.Core.Tests/vendor/downloads-manifest.vectors.json` iz `server/contracts/generated/fake-server/vectors.json` u ductura/serveru na commitu `6f7a594edc8dabf969e6aaada5cbaa7c41c685a1`. `UpdateOfferVectorsTests.Kopija_vektora_odgovara_izvoru` preuzima izvor na tom commitu (mreža, bez tokena) i pada kad se kopija razlikuje, kad vektor nedostaje ili je višak. Kad izađe izdanje s rutom, kopija se zamjenjuje lockom.
+`tests/Ductura.Core.Tests/UpdateOfferTests.cs` provjerava funkciju na sintetičkom manifestu oblika iz ugovora rute (`openapi/v1.json` u ductura/serveru na commitu `6f7a594edc8dabf969e6aaada5cbaa7c41c685a1`, put `/api/v1/downloads/manifest`) i tablicom negativnih klasa ulaza. Vektori rute iz zaključanog izdanja `@ductura/test-fakes` dolaze u 1072-2.
 
 ## Provjera verzije pri pokretanju (DAN-944)
 
