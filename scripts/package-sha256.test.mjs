@@ -127,6 +127,23 @@ test('writing refuses a name that --verify could not read back', () => {
   assert.equal(cli('--verify', fine), 0);
 });
 
+// Without a path the script works on dist/Ductura-Setup-x64.exe of the current
+// folder, the package Inno Setup writes (installer/Ductura.iss).
+test('without a path the script writes and checks dist/Ductura-Setup-x64.exe', () => {
+  const cwd = tempDir();
+  const run = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { cwd, encoding: 'utf8' }).status;
+  assert.equal(run(), 1);
+  assert.equal(run('--verify'), 1);
+  mkdirSync(join(cwd, 'dist'));
+  const pkg = join(cwd, 'dist', 'Ductura-Setup-x64.exe');
+  writeFileSync(pkg, 'abc');
+  assert.equal(run(), 0);
+  assert.equal(readFileSync(`${pkg}.sha256`, 'utf8'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  Ductura-Setup-x64.exe\n');
+  assert.equal(run('--verify'), 0);
+  writeFileSync(pkg, 'abd');
+  assert.equal(run('--verify'), 1);
+});
+
 // A valid .sha256 stays, so only the check of the package itself can fail.
 test('--verify fails when the package is gone or a folder next to a valid .sha256', () => {
   const gone = written();
@@ -143,8 +160,9 @@ test('wrong arguments exit with 2', () => {
     assert.equal(parseArgs(args), null, JSON.stringify(args));
     assert.equal(cli(...args), 2, JSON.stringify(args));
   }
-  assert.deepEqual(parseArgs([]), { verify: false, file: DEFAULT_PACKAGE });
-  assert.deepEqual(parseArgs(['--verify']), { verify: true, file: DEFAULT_PACKAGE });
+  assert.equal(DEFAULT_PACKAGE, 'dist/Ductura-Setup-x64.exe');
+  assert.deepEqual(parseArgs([]), { verify: false, file: 'dist/Ductura-Setup-x64.exe' });
+  assert.deepEqual(parseArgs(['--verify']), { verify: true, file: 'dist/Ductura-Setup-x64.exe' });
   assert.deepEqual(parseArgs(['x.exe', '--verify']), { verify: true, file: 'x.exe' });
 });
 
