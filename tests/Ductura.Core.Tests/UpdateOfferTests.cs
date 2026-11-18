@@ -82,6 +82,25 @@ public class UpdateOfferTests
     [InlineData("\"url\":\"{U}\"", "\"url\":\"/a\\ud800\"")]
     public void Redak_izvan_ugovora_ne_daje_ponudu(string find, string replace) => Assert.Null(Ready(find, replace));
 
+    // Root errors around an otherwise valid manifest, so the offer exists without them.
+    [Theory]
+    [InlineData("{\"packages\":[", "{\"extra\":1,\"packages\":[")]
+    [InlineData("{\"packages\":[", "{\"packages\":[],\"packages\":[")]
+    [InlineData("{D}\"}]}", "{D}\"}],\"packages\":[]}")]
+    public void Korijen_izvan_ugovora_ponistava_valjanu_ponudu(string find, string replace)
+    {
+        Assert.NotNull(UpdateOffer.Decide(200, Manifest, "0.9.0", "x64"));
+        Assert.Null(Ready(find, replace));
+    }
+
+    // A lone surrogate as a real character (not a \u escape) fails while transcoding to UTF-8.
+    [Theory]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/a\ud800\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/a\udc00\"")]
+    [InlineData("\"url\":\"{U}\"", "\"url\":\"/a\udc00\ud800\"")]
+    [InlineData("\"sha256\":\"{D}\"", "\"sha\ud800256\":\"{D}\"")]
+    public void Nespareni_surogat_u_tijelu_ne_daje_ponudu(string find, string replace) => Assert.Null(Ready(find, replace));
+
     [Fact]
     public void Predugacka_adresa_ne_daje_ponudu() =>
         Assert.Null(Ready("\"url\":\"{U}\"", $"\"url\":\"/{new string('a', 2048)}\""));

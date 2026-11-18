@@ -26,8 +26,9 @@ public static partial class UpdateOffer
             throw new ArgumentOutOfRangeException(nameof(architecture), architecture, "Podržani su x64 i arm64.");
         if (status != 200 || body is null || installedVersion is null || !VersionPattern().IsMatch(installedVersion)) return null;
         List<PackageOffer>? rows;
+        // ArgumentException: a lone surrogate in body cannot be transcoded to UTF-8; architecture is checked above.
         try { rows = Read(body, architecture); }
-        catch (Exception e) when (e is JsonException or InvalidOperationException or RegexMatchTimeoutException) { return null; }
+        catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException or RegexMatchTimeoutException) { return null; }
         return rows is [var row] && Packaging.IsNewer(row.Version, installedVersion) ? row : null;
     }
 
