@@ -161,6 +161,29 @@ public class UpdateOfferTests
         { 503, "ready", "0.9.0", "x64", null, null, null },
     };
 
+    // The offered url is the row's url verbatim: absolute, relative, with a query, with percent escapes and sub-delims.
+    // Any resolution, normalisation (case of %xx, %7E to ~, default path) or trimming of the query fails here.
+    [Theory]
+    [InlineData("/preuzimanje/ductura.msi")]
+    [InlineData("/preuzimanje/ductura.msi?v=1.0.0&kanal=stabilni")]
+    [InlineData("/preuzimanje/ductura.msi?")]
+    [InlineData("/preuzimanje/%7Eductura/%41%2f.msi?x=%2F&y=a+b")]
+    [InlineData("/preuzimanje/a;b=c/(d)!$'*,:@~.msi")]
+    [InlineData("/preuzimanje/ductura.msi/")]
+    [InlineData("https://preuzimanje.example.invalid/ductura/1.0.1/Ductura-Setup.msi")]
+    [InlineData("https://preuzimanje.example.invalid/ductura.msi?v=1.0.0&kanal=stabilni")]
+    [InlineData("https://preuzimanje.example.invalid/%7Eductura/%41.msi?x=%2F")]
+    [InlineData("https://preuzimanje.example.invalid/a//b/c.msi")]
+    public void Adresa_retka_vraca_se_doslovno(string url)
+    {
+        foreach (var (architecture, rowUrl, sha) in new[] { ("x64", X64Url, D), ("arm64", Arm64Url, new string('c', 64)) })
+        {
+            var body = Manifest.Replace($"\"url\":\"{rowUrl}\"", $"\"url\":\"{url}\"");
+            Assert.NotEqual(Manifest, body); // a mutation that does not apply would pass vacuously
+            Assert.Equal(new PackageOffer("1.0.0", url, sha), UpdateOffer.Decide(200, body, "0.9.0", architecture));
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Expected))]
     public void Manifest_daje_ocekivan_ishod(int status, string body, string installed, string architecture, string? version, string? url, string? sha) =>
