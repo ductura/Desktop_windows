@@ -113,6 +113,17 @@ test('--verify fails without the .sha256, without the package, or on a folder', 
   assert.throws(() => readFileSync(join(dir, 'missing.exe.sha256')));
 });
 
+// A valid .sha256 stays, so only the check of the package itself can fail.
+test('--verify fails when the package is gone or a folder next to a valid .sha256', () => {
+  const gone = written();
+  rmSync(gone);
+  assert.equal(cli('--verify', gone), 1);
+  const folder = written(Buffer.alloc(0));
+  rmSync(folder);
+  mkdirSync(folder);
+  assert.equal(cli('--verify', folder), 1);
+});
+
 test('wrong arguments exit with 2', () => {
   for (const args of [['--check'], ['-v'], ['a.exe', 'b.exe'], ['--verify', '--verify'], ['--verify', 'a', 'b'], ['']]) {
     assert.equal(parseArgs(args), null, JSON.stringify(args));
@@ -150,6 +161,7 @@ const load = () => {
   return doc.toJS({ maxAliasCount: 100 });
 };
 const PKG = 'dist/Ductura-Setup-x64.exe';
+const ISCC = '& "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" /DSourceDir=..\\publish installer\\Ductura.iss';
 const UPLOAD = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02';
 const NODE_TEST = 'node --test scripts/ci-ok.test.mjs scripts/contract-client.test.mjs scripts/package-sha256.test.mjs';
 const lines = (s) => (typeof s === 'string' ? s.split('\n').map((l) => l.trim()).filter(Boolean) : []);
@@ -164,9 +176,9 @@ function packageProblems(wf) {
     return at.length === 1 ? at[0] : `${what}: ${at.length} steps`;
   };
   const order = [
-    find('Inno Setup', (s) => typeof s.run === 'string' && s.run.includes('ISCC.exe')),
+    find('Inno Setup', (s) => same(lines(s.run), [ISCC])),
     find('write', (s) => same(lines(s.run), ['node --version', `node scripts/package-sha256.mjs ${PKG}`])),
-    find('functional test', (s) => typeof s.run === 'string' && s.run.includes('Install-And-Launch.ps1')),
+    find('functional test', (s) => same(lines(s.run), ['./tests/functional/Install-And-Launch.ps1'])),
     find('verify', (s) => same(lines(s.run), [`node scripts/package-sha256.mjs --verify ${PKG}`])),
     find('sha256sum', (s) => same(lines(s.run), ['cd dist && sha256sum -c Ductura-Setup-x64.exe.sha256'])),
     find('upload', (s) => s.uses === UPLOAD),
@@ -181,9 +193,11 @@ function packageProblems(wf) {
   if (Object.hasOwn(wf, 'defaults')) problems.push('workflow has defaults');
   for (const key of Object.keys(job)) if (!['runs-on', 'steps'].includes(key)) problems.push(`build-test has ${key}`);
   if (job['runs-on'] !== 'windows-latest') problems.push('build-test does not run on windows-latest');
-  for (const i of [write, verify, sum]) {
-    for (const key of Object.keys(steps[i])) if (!['name', 'run', ...(i === sum ? ['shell'] : [])].includes(key)) problems.push(`step ${i} has ${key}`);
-  }
+  // No step of the job may be skipped, allowed to fail or moved elsewhere
+  // (if, continue-on-error, working-directory, env, ...); only sha256sum sets a shell.
+  steps.forEach((step, i) => {
+    for (const key of Object.keys(step)) if (!['name', 'uses', 'with', 'run', ...(i === sum ? ['shell'] : [])].includes(key)) problems.push(`step ${i} has ${key}`);
+  });
   if (steps[sum].shell !== 'bash') problems.push('sha256sum step does not run in bash');
   const w = steps[upload].with ?? {};
   if (w.name !== 'Ductura-Setup-x64' || !same(lines(w.path).sort(), [PKG, `${PKG}.sha256`])) problems.push('upload is not the package and its .sha256');
@@ -220,7 +234,11 @@ const BROKEN = [
   ['job on Linux', (s, wf) => { wf.jobs['build-test']['runs-on'] = 'ubuntu-latest'; }],
   ['ci-ok-test swallows the result', (s, wf) => { wf.jobs['ci-ok-test'].steps.at(-1).run = `${NODE_TEST} || true`; }],
   ['ci-ok-test continue-on-error', (s, wf) => { wf.jobs['ci-ok-test'].steps.at(-1)['continue-on-error'] = true; }],
+  ['if on the functional test', (s) => { s.find((x) => String(x.run).includes('Install-And-Launch')).if = '${{ false }}'; }],
+  ['continue-on-error on Inno Setup', (s) => { s.find((x) => String(x.run).includes('ISCC.exe'))['continue-on-error'] = true; }],
+  ['if on the .NET tests', (s) => { s.find((x) => String(x.run).includes('dotnet test')).if = 'false'; }],
 ];
+test('the package step check has 22 broken workflows', () => assert.equal(BROKEN.length, 22));
 for (const [name, mutate] of BROKEN) {
   test(`package step check fails: ${name}`, () => {
     const wf = load();
