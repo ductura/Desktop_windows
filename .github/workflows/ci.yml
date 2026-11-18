@@ -19,13 +19,29 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Izrada instalacijskog paketa
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DSourceDir=..\publish installer\Ductura.iss'
+      # SHA-256 of the package (DAN-1074): written right after Inno Setup and
+      # checked twice just before the upload, by the script and by sha256sum.
+      # Each call is its own step: PowerShell passes on only the last exit code.
+      - name: SHA-256 paketa
+        run: |
+          node --version
+          node scripts/package-sha256.mjs dist/Ductura-Setup-x64.exe
       - name: Funkcionalni test (instalacija i pokretanje iz izbornika Start)
         run: ./tests/functional/Install-And-Launch.ps1
+      - name: Paket odgovara SHA-256 (skripta)
+        run: node scripts/package-sha256.mjs --verify dist/Ductura-Setup-x64.exe
+      - name: Paket odgovara SHA-256 (sha256sum)
+        shell: bash
+        run: cd dist && sha256sum -c Ductura-Setup-x64.exe.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with: { name: Ductura-Setup-x64, path: dist/Ductura-Setup-x64.exe }
+        with:
+          name: Ductura-Setup-x64
+          path: |
+            dist/Ductura-Setup-x64.exe
+            dist/Ductura-Setup-x64.exe.sha256
 
-  # Node tests on Linux: ci-ok itself (DAN-885) and the contract client
-  # script (DAN-958); build-test stays as it is.
+  # Node tests on Linux: ci-ok itself (DAN-885), the contract client script
+  # (DAN-958) and the package SHA-256 script and steps (DAN-1074).
   ci-ok-test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -41,7 +57,7 @@ jobs:
       - name: Install the YAML parser (package-lock.json, no scripts)
         run: npm ci --ignore-scripts
       - name: ci-ok tests
-        run: node --test scripts/ci-ok.test.mjs scripts/contract-client.test.mjs
+        run: node --test scripts/ci-ok.test.mjs scripts/contract-client.test.mjs scripts/package-sha256.test.mjs
 
   # The C# contract client (DAN-958) must equal a fresh Kiota generation from
   # the locked @ductura/contracts release (downloaded from github.com, so an
