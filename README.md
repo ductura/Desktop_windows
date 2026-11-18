@@ -13,7 +13,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 
 | Mapa | Sadržaj |
 |---|---|
-| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`) |
+| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`, ponuda novije verzije `UpdateOffer.Decide`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit), ugovornih vektora `health` (DAN-997) i vektora ID-a rada (DAN-1000) |
@@ -63,6 +63,10 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 ## Vektori ID-a rada (DAN-1000)
 
 `tests/Ductura.Core.Tests/WorkIdVectorsTests.cs` čita `vectors/work-id.json` iz izdanja `@ductura/contracts` zapisanog u `src/Ductura.Contracts/contract-lock.json` (isti tarball i sha256 kao ugovorni klijent; vektori postoje od 2.5.0). Datoteku čita strogo: višak, manjak ili krivi tip ključa ruši test. Svaki vektor ide kroz `LaunchOptions.Parse` kao poveznica `ductura://doc/<segment>`: `workIdFromPath` doslovno, a `isWorkId` s `%` i `/` kodiranima, pa parser dobiva natrag isti ID. Ulaz koji nije string mora biti odbijen, jer je argument pokretanja uvijek string. Test pada kad se promijeni presuda ili `id` vektora, kad vektor nestane, pridođe ili promijeni ime (broj i sha256 imena su u testu). Vektor `workIdFromPath` koji završava s `/` dao bi drukčiji ishod (ljuska skida jedan `/`); takav vektor je nalaz, ne promjena testa. Ručni slučajevi u `WorkIdTests.cs` ostaju jer nisu svi u vektorima. Test traži mrežu, kao DAN-997.
+
+## Ponuda novije verzije (DAN-1072)
+
+`UpdateOffer.Decide` u `Ductura.Core` iz odgovora `downloads.manifest.get` (S-1H.5) bira redak `windows` za `x64` ili `arm64` i nudi ga (verzija, adresa doslovno, sha256) samo kad je novija od instalirane. Status različit od 200, tijelo izvan ugovora (i u retku za macOS) i instalirana verzija koja nije strogi `major.minor.patch` ne nude ništa; dupli ključ i dupli par sustav/arhitektura su stroži od sheme. Provjerava oblik, nije sigurnosna kontrola: mreža, preuzimanje, provjera bajtova paketa i prikaz su kasniji koraci, a vektori rute iz `@ductura/test-fakes` su 1072-2. Testovi: `UpdateOfferTests.cs`, nad sintetičkim manifestom iz `openapi/v1.json` ductura/servera na `6f7a594`. Otvoreno: manifest navodi `.msi`, a paket je `Ductura-Setup-x64.exe` (odluka 12, DAN-932).
 
 ## Provjera verzije pri pokretanju (DAN-944)
 
