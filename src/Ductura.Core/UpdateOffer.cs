@@ -80,7 +80,7 @@ public static partial class UpdateOffer
     [GeneratedRegex(@"\A[0-9a-f]{64}\z", RegexOptions.CultureInvariant)]
     private static partial Regex Sha256Pattern();
 
-    // Verbatim from the contract (ductura/server 6f7a594, downloads.manifest.get); (?![\s\S]) is the end anchor.
+    // Verbatim from the contract (ductura/Institution_server 6f7a594, downloads.manifest.get); (?![\s\S]) is the end anchor.
     [GeneratedRegex(@"^(?![\s\S]*(?:%2[eE]|%00|/\.\.?(?:[/?]|(?![\s\S]))))(?:https://(?=[a-z0-9.-]{1,253}/)(?!(?:[a-z0-9.-]*\.)?(?:localhost|local|internal|home\.arpa)/)(?![a-z0-9]{2}--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.(?![a-z0-9]{2}--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.(?![a-z0-9]{2}--)[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)?/(?![/?])(?:[A-Za-z0-9._~!$&'()*+,;=:@/?-]|%[0-9A-Fa-f]{2})+(?![\s\S])", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex UrlPattern();
 }

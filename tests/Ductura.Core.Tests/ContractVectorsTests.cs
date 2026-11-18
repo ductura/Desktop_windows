@@ -28,7 +28,7 @@ public static class TestFakesRelease
     private static readonly string[] Keys = ["version", "url", "sha256"];
 
     public static string UrlFor(string version) =>
-        $"https://github.com/ductura/server/releases/download/test-fakes-v{version}/ductura-test-fakes-{version}.tgz";
+        $"https://github.com/ductura/Institution_server/releases/download/test-fakes-v{version}/ductura-test-fakes-{version}.tgz";
 
     /// <summary>Exactly the keys version, url and sha256, each once and a string; anything else is an error.</summary>
     public static Lock ParseLock(string json)
@@ -129,14 +129,14 @@ public class ContractVectorsTests
     [InlineData("03.0.1", null)]
     [InlineData("3.0.1\n", null)]
     [InlineData("3.0.١", null)]
-    [InlineData("3.0.1", "http://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
+    [InlineData("3.0.1", "http://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
     [InlineData("3.0.1", "https://example.test/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.0/ductura-test-fakes-3.0.1.tgz")]
-    [InlineData("3.0.1", " https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\r\n")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\t")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz ")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\u007f")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.0/ductura-test-fakes-3.0.1.tgz")]
+    [InlineData("3.0.1", " https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\r\n")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\t")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz ")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\u007f")]
     public void Neispravna_verzija_ili_adresa_pada(string version, string? url) =>
         Assert.Throws<InvalidDataException>(() => TestFakesRelease.ParseLock(LockJson(version, url, new string('a', 64))));
 

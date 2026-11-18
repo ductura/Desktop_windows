@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Ductura.Core.Tests;
 
-// Cases copied from ductura/server server/contracts/work-id.test.ts at
+// Cases copied from ductura/Institution_server server/contracts/work-id.test.ts at
 // 7b78d9b071dc2cb54392840bcdf353e68be865e3 (S-1H.1-c), plus edge classes the
 // port to .NET must get the same way as JS. Invented ids only.
 public class WorkIdTests
