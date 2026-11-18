@@ -2,7 +2,7 @@
 // package changes after the digest was written and passes on the untouched
 // package, and build-test uploads the package with a checked .sha256.
 // Run with node --test scripts/package-sha256.test.mjs from the repository root.
-import { after, test } from 'node:test';
+import { after, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { DEFAULT_PACKAGE, parseArgs, parseLine, writeDigest } from './package-sha256.mjs';
+import { DEFAULT_PACKAGE, naming, parseArgs, parseLine, writeDigest } from './package-sha256.mjs';
 
 const SCRIPT = fileURLToPath(new URL('package-sha256.mjs', import.meta.url));
 const NAME = 'Ductura-Setup-x64.exe';
@@ -181,11 +181,37 @@ test('writing fails when the temporary path already exists and changes nothing t
   for (const make of [() => linkSync(pkg, tmp), () => symlinkSync(pkg, tmp), () => writeFileSync(tmp, 'old')]) {
     rmSync(tmp, { force: true });
     make();
-    await assert.rejects(writeDigest(pkg, () => 'fixed'), { code: 'EEXIST' });
+    mock.method(naming, 'random', () => 'fixed');
+    await assert.rejects(writeDigest(pkg), { code: 'EEXIST' });
+    mock.restoreAll();
     assert.equal(readFileSync(pkg, 'utf8'), 'abc');
     assert.throws(() => readFileSync(`${pkg}.sha256`));
   }
   assert.equal(readFileSync(tmp, 'utf8'), 'old');
+});
+
+test('the temporary name is 32 random hex characters', () => {
+  const names = Array.from({ length: 20 }, () => naming.random());
+  for (const n of names) assert.match(n, /^[0-9a-f]{32}$/);
+  assert.equal(new Set(names).size, names.length);
+});
+
+test('writing refuses a package whose link chain passes through its .sha256', () => {
+  const dir = tempDir();
+  const pkg = join(dir, NAME);
+  writeFileSync(join(dir, 'real'), 'abc');
+  for (const setup of [
+    () => { writeFileSync(`${pkg}.sha256`, 'abc'); symlinkSync(`${NAME}.sha256`, pkg); },
+    () => { symlinkSync('real', `${pkg}.sha256`); symlinkSync(`${pkg}.sha256`, pkg); },
+    () => { writeFileSync(`${pkg}.sha256`, 'abc'); symlinkSync(`${NAME}.sha256`, join(dir, 'mid')); symlinkSync('mid', pkg); },
+  ]) {
+    for (const f of [pkg, `${pkg}.sha256`, join(dir, 'mid')]) rmSync(f, { force: true });
+    setup();
+    assert.equal(cli(pkg), 1);
+    assert.equal(readFileSync(pkg, 'utf8'), 'abc');
+    assert.equal(readFileSync(join(dir, 'real'), 'utf8'), 'abc');
+  }
+  assert.deepEqual(readdirSync(dir).sort(), [NAME, `${NAME}.sha256`, 'mid', 'real'].sort());
 });
 
 test('a failed rename leaves no temporary file', () => {

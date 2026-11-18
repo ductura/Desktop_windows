@@ -6,8 +6,8 @@
 // without a folder, LF; anything else fails the check. Exit 0 when written or
 // matching, 1 on a failed check or a missing file, 2 on wrong arguments.
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { closeSync, createReadStream, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_PACKAGE = 'dist/Ductura-Setup-x64.exe';
@@ -51,15 +51,35 @@ export function parseLine(bytes, name) {
 // It never writes through an existing path: the line goes to a new file with a
 // random name opened exclusively (wx fails on any existing entry, links too),
 // which is then renamed onto <package>.sha256, replacing a link instead of
-// following it. `random` is replaceable only so a test can name the file.
-export async function writeDigest(path, random = () => randomBytes(16).toString('hex')) {
+// following it. A package whose link chain passes through <package>.sha256
+// is refused, since the rename would change what the package reads.
+// `naming.random` is an object property only so a test can name the file.
+export const naming = { random: () => randomBytes(16).toString('hex') };
+
+// The same directory entry: real folder plus name (letter case ignored on Windows).
+function entry(p) {
+  const e = join(realpathSync(dirname(resolve(p))), basename(p));
+  return process.platform === 'win32' ? e.toLowerCase() : e;
+}
+
+export async function writeDigest(path) {
   const hex = await sha256File(path);
   const line = `${hex}  ${basename(path)}\n`;
   parseLine(Buffer.from(line), basename(path));
   const target = `${path}.sha256`;
-  const tmp = join(dirname(target), `.${basename(target)}.${random()}.tmp`);
-  writeFileSync(tmp, line, { flag: 'wx' });
+  for (let p = resolve(path), hops = 0; hops < 64; hops += 1) {
+    if (entry(p) === entry(target)) throw new Error(`${path} leads to ${basename(target)}`);
+    if (!lstatSync(p).isSymbolicLink()) break;
+    p = resolve(dirname(p), readlinkSync(p));
+  }
+  const tmp = join(dirname(target), `.${basename(target)}.${naming.random()}.tmp`);
+  const fd = openSync(tmp, 'wx');
   try {
+    try {
+      writeFileSync(fd, line);
+    } finally {
+      closeSync(fd);
+    }
     renameSync(tmp, target);
   } catch (error) {
     rmSync(tmp, { force: true });
