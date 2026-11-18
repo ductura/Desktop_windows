@@ -7,7 +7,7 @@ Izvori:
 - [plan migracije](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md) (u daljnjem tekstu: migracija): §1a, §1b, §3, §4 (faza E), §5, §6, §8 t. 5 do 8 i §9;
 - [karta](https://github.com/ductura/.github/blob/main/docs/plan/KARTA.md) (u daljnjem tekstu: karta): paketi, §1, §3, §4 i §5 t. 12.
 
-Oblik je isti kao u [planu servera](https://github.com/ductura/server/blob/main/docs/PLAN.md) i [planu weba](https://github.com/ductura/web/blob/main/docs/PLAN.md). Vlasnik je 16. 11. desktopu dopustio samo zadatke D1 do D6, bez odluka 8 i 12 (Ductus#2012).
+Oblik je isti kao u [planu servera](https://github.com/ductura/Institution_server/blob/main/docs/PLAN.md) i [planu weba](https://github.com/ductura/Institution_front_web_chrome/blob/main/docs/PLAN.md). Vlasnik je 16. 11. desktopu dopustio samo zadatke D1 do D6, bez odluka 8 i 12 (Ductus#2012).
 
 ## 0. Otvorene odluke (ovaj plan ih ne donosi)
 
@@ -25,7 +25,7 @@ Karta za ugovorni klijent piše „C#/Swift klijent”. To vrijedi samo uz put A
 
 ## 1. Svrha i granica
 
-**Svrha.** Windows aplikacija Ducture je tanka izvorna ljuska oko **istog web paketa** iz `ductura/web` (migracija §8 t. 5). Ljuska radi:
+**Svrha.** Windows aplikacija Ducture je tanka izvorna ljuska oko **istog web paketa** iz `ductura/Institution_front_web_chrome` (migracija §8 t. 5). Ljuska radi:
 - prozor;
 - instalaciju i ažuriranje;
 - prijavu tokom po ADR-u S-1E-e;

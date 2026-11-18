@@ -75,7 +75,7 @@ jobs:
           if node scripts/contract-client.mjs check; then echo "::error::check passed on changed code"; exit 1; fi
           git checkout -- src/Ductura.Contracts/Generated
           v="$(jq -r .version src/Ductura.Contracts/contract-lock.json)"
-          curl -fsSL "https://github.com/ductura/server/releases/download/contracts-v$v/ductura-contracts-$v.tgz" | tar -xzO package/openapi/v1.json \
+          curl -fsSL "https://github.com/ductura/Institution_server/releases/download/contracts-v$v/ductura-contracts-$v.tgz" | tar -xzO package/openapi/v1.json \
             | jq '.paths["/api/v1/health"].get.responses["200"].content["application/json"].schema.properties.minClientVersion.description = "changed"' > "$RUNNER_TEMP/changed.json"
           if node scripts/contract-client.mjs check "$RUNNER_TEMP/changed.json"; then echo "::error::check passed on a changed contract"; exit 1; fi
 
