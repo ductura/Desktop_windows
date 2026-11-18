@@ -5,7 +5,7 @@ namespace Ductura.Core;
 
 /// <summary>
 /// ID rada po pravilu ugovora (S-1H.1-c): prijenos <c>isWorkId</c> i <c>workIdFromPath</c> iz
-/// ductura/server <c>server/contracts/work-id.ts</c> na 7b78d9b071dc2cb54392840bcdf353e68be865e3.
+/// ductura/Institution_server <c>server/contracts/work-id.ts</c> na 7b78d9b071dc2cb54392840bcdf353e68be865e3.
 /// Isti ishod kao JS: rubni razmak po <c>String.prototype.trim</c>, \p{Cc}, usamljeni surogat,
 /// duljina u code pointovima i jednokratno strogo dekodiranje kao <c>decodeURIComponent</c>.
 /// </summary>

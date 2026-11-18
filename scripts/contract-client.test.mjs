@@ -50,7 +50,7 @@ for (const [name, text] of BAD_LOCKS) {
 
 test('lock of 2.2.0 is accepted', () => {
   assert.deepEqual(parseLock(lock({})), { version: '2.2.0', sha256: SHA });
-  assert.equal(tarballUrl('2.2.0'), 'https://github.com/ductura/server/releases/download/contracts-v2.2.0/ductura-contracts-2.2.0.tgz');
+  assert.equal(tarballUrl('2.2.0'), 'https://github.com/ductura/Institution_server/releases/download/contracts-v2.2.0/ductura-contracts-2.2.0.tgz');
 });
 
 test('tarball with another sha256 is refused, the locked one passes', () => {

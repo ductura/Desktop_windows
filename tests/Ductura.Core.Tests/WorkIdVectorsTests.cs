@@ -29,7 +29,7 @@ public static class ContractsRelease
     private static readonly Regex Sha256 = new(@"\A[0-9a-f]{64}\z", RegexOptions.CultureInvariant);
 
     public static string UrlFor(string version) =>
-        $"https://github.com/ductura/server/releases/download/contracts-v{version}/ductura-contracts-{version}.tgz";
+        $"https://github.com/ductura/Institution_server/releases/download/contracts-v{version}/ductura-contracts-{version}.tgz";
 
     /// <summary>Exactly the string keys version and sha256, each once.</summary>
     public static Lock ParseLock(string json)
