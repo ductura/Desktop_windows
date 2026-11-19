@@ -2,7 +2,7 @@
 
 Windows aplikacija i instalacijski paket. Tehnologija: C# / .NET 8, WinForms prozor s WebView2 (spike D-0.1, DAN-956; ovisi o odluci 8, otvoreno), paket preko Inno Setupa.
 
-Plan repozitorija: [docs/PLAN.md](docs/PLAN.md).
+Plan repozitorija: [docs/PLAN.md](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md#katalog-zadataka).
 
 ## Funkcionalna provjera
 
@@ -51,7 +51,7 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 ## Ugovorni klijent (DAN-958)
 
-`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/servera slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Koristi ga `HealthProbe.ReadAsync` u `Ductura.Core` (DAN-944-2a): zahtjev gradi generirani klijent, a tijelo provjerava `HealthProbe`, jer generirani model krivi tip polja pretvara u null. Prozor ga još ne poziva (944-2b). Paketi klijenta (Kiota) time ulaze i u instalacijski paket. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](docs/PLAN.md) §0).
+`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/servera slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Koristi ga `HealthProbe.ReadAsync` u `Ductura.Core` (DAN-944-2a): zahtjev gradi generirani klijent, a tijelo provjerava `HealthProbe`, jer generirani model krivi tip polja pretvara u null. Prozor ga još ne poziva (944-2b). Paketi klijenta (Kiota) time ulaze i u instalacijski paket. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md#katalog-zadataka) §0).
 
 - Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu (na Windowsu skripta odbija rad, jer uspoređuje bajtove) i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
 - CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak dokazuje da `check` pada kad se izmijeni generirana datoteka i kad se izmijeni opis polja `health` u OpenAPI-ju. Posao preuzima tarball s github.com, pa ispad GitHuba ruši `ci-ok`.
