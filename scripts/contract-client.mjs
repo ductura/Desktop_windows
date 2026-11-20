@@ -19,9 +19,9 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const KEYS = ['sha256', 'version'];
 const REQUIRED = 'Api/V1/Health/HealthRequestBuilder.cs';
 
-/** Release tarball of @ductura/contracts on the public GitHub Releases of ductura/server. */
+/** Release tarball of @ductura/contracts on the public GitHub Releases of ductura/Institution_server. */
 export const tarballUrl = (version) =>
-  `https://github.com/ductura/server/releases/download/contracts-v${version}/ductura-contracts-${version}.tgz`;
+  `https://github.com/ductura/Institution_server/releases/download/contracts-v${version}/ductura-contracts-${version}.tgz`;
 
 /** Parses contract-lock.json: exactly version and sha256 (own keys only). */
 export function parseLock(text) {

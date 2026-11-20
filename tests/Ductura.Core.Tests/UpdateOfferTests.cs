@@ -5,7 +5,7 @@ namespace Ductura.Core.Tests;
 
 /// <summary>
 /// Update offer (DAN-1072-1) against manifests in the shape of <c>downloads.manifest.get</c>
-/// (ductura/server@6f7a594edc8dabf969e6aaada5cbaa7c41c685a1:openapi/v1.json, 200 body). Every negative case changes
+/// (ductura/Institution_server@6f7a594edc8dabf969e6aaada5cbaa7c41c685a1:openapi/v1.json, 200 body). Every negative case changes
 /// one place of <see cref="Manifest"/>, which without the change offers windows/x64 and windows/arm64 1.0.0 to 0.9.0,
 /// and runs on both orders of <see cref="Orders"/>.
 /// </summary>
