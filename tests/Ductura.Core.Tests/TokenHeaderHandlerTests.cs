@@ -51,4 +51,13 @@ public class TokenHeaderHandlerTests
         var seen = await Send("https://ductura.org/api/v1/me", token, r => r.Headers.TryAddWithoutValidation("Authorization", "Bearer old"));
         Assert.Null(seen.Headers.Authorization);
     }
+
+    [Fact]
+    public void Transport_with_cookies_enabled_is_refused()
+    {
+        Assert.Throws<ArgumentException>(() => new TokenHeaderHandler(() => "t", new HttpClientHandler()));
+        Assert.Throws<ArgumentException>(() => new TokenHeaderHandler(() => "t", new SocketsHttpHandler()));
+        using var ok1 = new TokenHeaderHandler(() => "t", new HttpClientHandler { UseCookies = false });
+        using var ok2 = new TokenHeaderHandler(() => "t", new SocketsHttpHandler { UseCookies = false });
+    }
 }
