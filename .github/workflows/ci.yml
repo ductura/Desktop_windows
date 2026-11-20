@@ -11,6 +11,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with: { dotnet-version: 8.0.x }
+      - name: Izgradnja aplikacije
+        run: dotnet build src/Ductura.Desktop --configuration Release
       - name: Testovi pomoćnih funkcija
         run: dotnet test tests/Ductura.Core.Tests --configuration Release
       - name: Objava aplikacije
@@ -19,6 +21,12 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Izrada instalacijskog paketa
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DSourceDir=..\publish installer\Ductura.iss'
+      - name: Provjera nepotpisanog instalacijskog paketa
+        run: |
+          $signature = Get-AuthenticodeSignature -LiteralPath dist/Ductura-Setup-x64.exe
+          if ($signature.Status -ne 'NotSigned') {
+            throw "Očekivan je nepotpisani instalacijski paket. Status: $($signature.Status)"
+          }
       - name: Funkcionalni test (instalacija i pokretanje iz izbornika Start)
         run: ./tests/functional/Install-And-Launch.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

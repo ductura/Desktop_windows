@@ -1,34 +1,44 @@
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 
 namespace Ductura.Core;
 
 /// <summary>
-/// Prijava tokom u zaglavlju (ADR S-1E-e): svaki zahtjev nosi <c>Authorization: Bearer</c>, nikad kolačić.
-/// Token daje pozivatelj (nakon prijave kroz AAI@EduHr); ovdje se ne sprema ni ne piše u zapis.
-/// Zahtjev bez https-a ne dobiva token, a postojeće zaglavlje <c>Authorization</c> i <c>Cookie</c> se uklanjaju.
+/// Nativni HTTP transport za ADR S-1E-e. Bearer token šalje samo na /api/v1 na potvrđenom web podrijetlu.
+/// Token daje pozivatelj nakon prijave, a transport ne sprema kolačiće i ne slijedi preusmjeravanja.
 /// </summary>
-public sealed class TokenHeaderHandler : DelegatingHandler
+public sealed partial class TokenHeaderHandler : DelegatingHandler
 {
-    private readonly Func<string?> tokenSource;
+    private readonly Uri _origin;
+    private readonly Func<string?> _tokenSource;
 
-    /// <summary>Unutarnji transport s uključenim <c>UseCookies</c> se odbija: sam bi dodavao kolačić nakon ovog rukovatelja.</summary>
-    public TokenHeaderHandler(Func<string?> tokenSource, HttpMessageHandler inner) : base(inner)
+    public TokenHeaderHandler(WebAddress web, Func<string?> tokenSource)
+        : this(web, tokenSource, new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false })
     {
-        if (inner is HttpClientHandler { UseCookies: true } or SocketsHttpHandler { UseCookies: true })
-            throw new ArgumentException("The transport must have UseCookies = false (no cookies, ADR S-1E-e).", nameof(inner));
-        this.tokenSource = tokenSource;
     }
 
-    /// <summary>Token je neprazan, bez razmaka i kontrolnih znakova (jedan HTTP token68 niz).</summary>
-    public static bool IsValidToken(string? token) =>
-        !string.IsNullOrEmpty(token) && token.Length <= 4096
-        && token.All(c => c is > ' ' and < '\u007f');
+    internal TokenHeaderHandler(WebAddress web, Func<string?> tokenSource, HttpMessageHandler inner) : base(inner)
+    {
+        if (inner is HttpClientHandler { UseCookies: true } or SocketsHttpHandler { UseCookies: true })
+            throw new ArgumentException("The transport must disable automatic cookies.", nameof(inner));
+        if (inner is HttpClientHandler { AllowAutoRedirect: true } or SocketsHttpHandler { AllowAutoRedirect: true })
+            throw new ArgumentException("The transport must disable automatic redirects.", nameof(inner));
+        _origin = new Uri(web.Url);
+        _tokenSource = tokenSource;
+    }
+
+    [GeneratedRegex(@"\A[A-Za-z0-9._~+/\-]+=*\z", RegexOptions.CultureInvariant)]
+    private static partial Regex Token68();
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
     {
         request.Headers.Remove("Cookie");
         request.Headers.Authorization = null;
-        if (request.RequestUri is { Scheme: "https" } && tokenSource() is { } token && IsValidToken(token))
+        if (request.RequestUri is { IsAbsoluteUri: true } target
+            && target.Scheme == _origin.Scheme && target.Host == _origin.Host && target.Port == _origin.Port
+            && target.UserInfo.Length == 0 && request.Headers.Host is null
+            && target.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal)
+            && _tokenSource() is { Length: > 0 and <= 4096 } token && Token68().IsMatch(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return base.SendAsync(request, cancel);
     }
