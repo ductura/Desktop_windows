@@ -13,11 +13,14 @@ public class TokenHeaderHandlerTests
     private sealed class Capture : HttpMessageHandler
     {
         public HttpRequestMessage? Seen;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
+        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancel)
         {
             Seen = request;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            return new HttpResponseMessage(HttpStatusCode.OK);
         }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel) =>
+            Task.FromResult(Send(request, cancel));
     }
 
     private static async Task<HttpRequestMessage> Send(string url, string? token, Action<HttpRequestMessage>? prepare = null)
@@ -60,6 +63,17 @@ public class TokenHeaderHandlerTests
         });
         Assert.Null(seen.Headers.Authorization);
         Assert.False(seen.Headers.Contains("Cookie"));
+    }
+
+    [Fact]
+    public void Synchronous_requests_also_use_authentication_without_cookies()
+    {
+        using var http = new HttpClient(new TokenHeaderHandler(Web, () => "demo-token", new Capture()));
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://ductura.example/api/v1/me");
+        request.Headers.Add("Cookie", "s=1");
+        using var response = http.Send(request);
+        Assert.Equal("Bearer demo-token", request.Headers.Authorization!.ToString());
+        Assert.False(request.Headers.Contains("Cookie"));
     }
 
     [Fact]

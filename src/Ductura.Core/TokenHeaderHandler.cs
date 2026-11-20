@@ -30,16 +30,27 @@ public sealed partial class TokenHeaderHandler : DelegatingHandler
     [GeneratedRegex(@"\A[A-Za-z0-9._~+/\-]+=*\z", RegexOptions.CultureInvariant)]
     private static partial Regex Token68();
 
+    protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancel)
+    {
+        ApplyHeaders(request);
+        return base.Send(request, cancel);
+    }
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
+    {
+        ApplyHeaders(request);
+        return base.SendAsync(request, cancel);
+    }
+
+    private void ApplyHeaders(HttpRequestMessage request)
     {
         request.Headers.Remove("Cookie");
         request.Headers.Authorization = null;
         if (request.RequestUri is { IsAbsoluteUri: true } target
             && target.Scheme == _origin.Scheme && target.Host == _origin.Host && target.Port == _origin.Port
-            && target.UserInfo.Length == 0 && request.Headers.Host is null
+            && target.UserInfo.Length == 0 && !request.Headers.Contains("Host")
             && target.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal)
             && _tokenSource() is { Length: > 0 and <= 4096 } token && Token68().IsMatch(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return base.SendAsync(request, cancel);
     }
 }
