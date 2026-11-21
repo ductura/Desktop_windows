@@ -78,6 +78,10 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 | `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se: web i preloader (D-300) prikazuju stanje servera; `minClientVersion` je savjet za nadogradnju, ne sigurnosna granica |
 | `Current` | klijent je jednak ili noviji, ili odgovor nema `minClientVersion` | otvara se |
 
+## Tipke koje šalje program (prijedlog P-3, red-team)
+
+**PRIJEDLOG** (`docs/ductus/USTAV-DOPUNA-P3.md` u ductura/.github): ništa se ne prikazuje i ništa se ne bilježi u običnom radu. Samo uz `--key-tally-out <putanja>` prozor preko Raw Inputa, dok je u prvom planu i bez globalne kuke, broji pritiske tipki s uređaja i tipke koje je poslao program (`hDevice = 0`) i pri zatvaranju zapisuje dva broja (`KeyOriginTally`, `KeysFromProgramRule` u `Ductura.Core`). `tests/functional/Key-Origin-RedTeam.ps1` pokreće paket, šalje F24 preko `SendInput` samo dok je Ductura u prvom planu i traži da se svaka tipka broji kao tipka programa. Tipke s prave tipkovnice skripta ne može proizvesti: to se provjerava ručno (pokreni s opcijom, utipkaj nekoliko slova, zatvori, `deviceKeys` > 0, `programKeys` = 0). Zaslonska tipkovnica sustava također šalje tipke kao program, pa pravilo nikad ne okida uz pomoćnu tehnologiju ili prilagodbu.
+
 ## Pokretanje
 
 ```powershell

@@ -23,6 +23,16 @@ public class LaunchOptionsTests
         Assert.Equal(@"C:\temp\ok.txt", o.SmokeOutput);
     }
 
+    [Fact]
+    public void Key_tally_out_samo_zapisuje_putanju_i_ne_ukljucuje_smoke()
+    {
+        Assert.Null(LaunchOptions.Parse([]).KeyTallyOutput);
+        var o = LaunchOptions.Parse(["--key-tally-out", @"C:\temp\tally.json"]);
+        Assert.Equal(@"C:\temp\tally.json", o.KeyTallyOutput);
+        Assert.False(o.Smoke);
+        Assert.Null(LaunchOptions.Parse(["--key-tally-out"]).KeyTallyOutput);
+    }
+
     // The work id rule itself is in WorkIdTests; here the link: prefix, segment and URL.
     [Theory]
     [InlineData("ductura://doc/demo-1", "demo-1")]
