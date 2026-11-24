@@ -59,6 +59,12 @@ internal static class RawKeyboard
             [new RawInputDevice { UsagePage = 0x01, Usage = 0x06, Flags = 0, Target = window }],
             1, (uint)Marshal.SizeOf<RawInputDevice>());
 
+    /// <summary>Stops Raw Input for the keyboard (RIDEV_REMOVE), while the exam hook is on.</summary>
+    public static bool Unregister() =>
+        RegisterRawInputDevices(
+            [new RawInputDevice { UsagePage = 0x01, Usage = 0x06, Flags = 0x00000001, Target = IntPtr.Zero }],
+            1, (uint)Marshal.SizeOf<RawInputDevice>());
+
     /// <summary>The device handle (zero for a key a program sent) and whether it is a release.</summary>
     public static (IntPtr Device, bool Released)? Read(IntPtr lParam)
     {

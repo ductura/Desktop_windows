@@ -6,10 +6,15 @@
 # Safety: only F24 is sent (no app acts on it), and only while Ductura is the foreground window; if another window
 # takes the foreground, the script stops sending and fails.
 #
-#   ./tests/functional/Key-Origin-RedTeam.ps1 [-Exe publish/Ductura.exe] [-Keys 60]
+# With -ExamGate (P-4 exam mode, PROPOSAL) the app runs with --exam-gate: every key a program sends must be
+# dropped before it reaches the window, and all are counted as dropped. While the exam hook runs the hook itself
+# counts the keys it lets through: Windows does not call a low-level hook in a process that has Raw Input registered.
+#
+#   ./tests/functional/Key-Origin-RedTeam.ps1 [-Exe publish/Ductura.exe] [-Keys 60] [-ExamGate]
 param(
     [string]$Exe = (Join-Path $PSScriptRoot '..\..\publish\Ductura.exe'),
-    [int]$Keys = 60
+    [int]$Keys = 60,
+    [switch]$ExamGate
 )
 $ErrorActionPreference = 'Stop'
 
@@ -33,7 +38,8 @@ public static class RedTeamInput {
 
 $out = Join-Path ([IO.Path]::GetTempPath()) "ductura-key-tally-$PID.json"
 Remove-Item $out -ErrorAction SilentlyContinue
-$app = Start-Process -FilePath $Exe -ArgumentList '--key-tally-out', $out -PassThru
+$arguments = @('--key-tally-out', $out) + $(if ($ExamGate) { @('--exam-gate') } else { @() })
+$app = Start-Process -FilePath $Exe -ArgumentList $arguments -PassThru
 try {
     $deadline = (Get-Date).AddSeconds(30)
     while ($app.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $app.Refresh() }
@@ -59,7 +65,14 @@ finally {
 if (-not (Test-Path $out)) { throw 'no tally was written' }
 $tally = Get-Content $out -Raw | ConvertFrom-Json
 Remove-Item $out
-Write-Host "Tally: device $($tally.deviceKeys), program $($tally.programKeys) (sent $Keys)"
+Write-Host "Tally: device $($tally.deviceKeys), program $($tally.programKeys), dropped $($tally.blockedKeys) (sent $Keys)"
+if ($ExamGate) {
+    if ($tally.blockedKeys -ne $Keys) { throw "expected exam mode to drop $Keys keys, it dropped $($tally.blockedKeys)" }
+    if ($tally.programKeys -ne 0) { throw "expected no program key to reach the window, $($tally.programKeys) did" }
+    if ($tally.deviceKeys -ne 0) { throw "expected no keys from a device, got $($tally.deviceKeys)" }
+    Write-Host 'OK: exam mode dropped every key sent by a program before it reached the window'
+    exit 0
+}
 if ($tally.programKeys -ne $Keys) { throw "expected $Keys keys from a program, got $($tally.programKeys)" }
 if ($tally.deviceKeys -ne 0) { throw "expected no keys from a device, got $($tally.deviceKeys)" }
 Write-Host 'OK: every key sent by a program was counted as a program''s'

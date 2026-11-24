@@ -2,11 +2,11 @@ namespace Ductura.Core;
 
 /// <summary>Argumenti pokretanja. --smoke služi funkcionalnom testu: aplikacija se pokrene, zapiše potvrdu i izađe.
 /// --shell-smoke-out otvara prozor i zapisuje što je prikazao (DAN-956); ne uključuje --smoke.</summary>
-public sealed record LaunchOptions(bool Smoke, string? SmokeOutput, string? OpenDocumentId, string? ShellSmokeOutput = null, string? KeyTallyOutput = null)
+public sealed record LaunchOptions(bool Smoke, string? SmokeOutput, string? OpenDocumentId, string? ShellSmokeOutput = null, string? KeyTallyOutput = null, bool ExamGate = false)
 {
     public static LaunchOptions Parse(IReadOnlyList<string> args)
     {
-        bool smoke = false;
+        bool smoke = false, examGate = false;
         string? output = null, doc = null, shellOutput = null, keyTally = null;
         for (int i = 0; i < args.Count; i++)
         {
@@ -17,13 +17,15 @@ public sealed record LaunchOptions(bool Smoke, string? SmokeOutput, string? Open
                 case "--shell-smoke-out" when i + 1 < args.Count: shellOutput = args[++i]; break;
                 // Red-team of P-3 (PROPOSAL): count key origins in the window and write them on close.
                 case "--key-tally-out" when i + 1 < args.Count: keyTally = args[++i]; break;
+                // P-4 (PROPOSAL): exam mode from the start, without the page; for the red-team test and a lab room.
+                case "--exam-gate": examGate = true; break;
                 default:
                     if (args[i].StartsWith(DocLinkPrefix, StringComparison.OrdinalIgnoreCase))
                         doc = DocumentIdFromLink(args[i][DocLinkPrefix.Length..]);
                     break;
             }
         }
-        return new LaunchOptions(smoke, output, doc, shellOutput, keyTally);
+        return new LaunchOptions(smoke, output, doc, shellOutput, keyTally, examGate);
     }
 
     private const string DocLinkPrefix = "ductura://doc/";
