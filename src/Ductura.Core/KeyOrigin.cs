@@ -50,6 +50,10 @@ public sealed class KeyOriginTally
     /// <summary>The same, with the number of keys exam mode dropped before they reached the window (--exam-gate).</summary>
     public string ToJson(int blockedKeys) =>
         $"{{\"deviceKeys\":{DeviceKeys},\"programKeys\":{ProgramKeys},\"blockedKeys\":{blockedKeys}}}";
+
+    /// <summary>The same, with the keys the page received and those of them that never passed the hook (PageKeyLedger).</summary>
+    public string ToJson(int blockedKeys, int pageKeys, int unaccountedKeys) =>
+        $"{{\"deviceKeys\":{DeviceKeys},\"programKeys\":{ProgramKeys},\"blockedKeys\":{blockedKeys},\"pageKeys\":{pageKeys},\"unaccountedKeys\":{unaccountedKeys}}}";
 }
 
 /// <summary>Rule R-5 of P-3: keys sent by a program. The thresholds are PLACEHOLDERS until samples (P-2 §5).</summary>

@@ -38,6 +38,8 @@ internal sealed class MainForm : Form
     private readonly WebAddress? _web;
     // P-4 exam mode (PROPOSAL): the page turns it on; --exam-gate turns it on from the start.
     private readonly ExamKeyGate _exam = new();
+    // Keys posted straight to the WebView2 window never pass the hook: the page counts what it received.
+    private readonly PageKeyLedger _ledger = new();
     private LowLevelKeyboard? _hook;
     private WebView2? _webView;
     private int _blockedReportPending;
@@ -81,7 +83,11 @@ internal sealed class MainForm : Form
         if (!_exam.Block(flags, released, foreground))
         {
             // Raw Input counts only keys for this window in the foreground; the hook sees every key, so the same.
-            if (foreground) _keys?.RecordHookKey(flags, released);
+            if (foreground)
+            {
+                _keys?.RecordHookKey(flags, released);
+                _ledger.HookPassed(released);
+            }
             return false;
         }
         // Tell the page later, outside the hook: the hook must answer at once.
@@ -124,7 +130,7 @@ internal sealed class MainForm : Form
             // With --exam-gate also the number of keys exam mode dropped before they reached the window.
             _keys = new KeyOriginTally();
             FormClosed += (_, _) => File.WriteAllText(tallyPath,
-                options.ExamGate ? _keys.ToJson(_exam.BlockedKeys) : _keys.ToJson());
+                options.ExamGate ? _keys.ToJson(_exam.BlockedKeys, _ledger.PageKeyCount, _ledger.Unaccounted) : _keys.ToJson());
         }
         // Fail closed: never open an address that did not pass the check, and create no WebView2 for it.
         var view = Startup.Shell(options, web);
@@ -171,6 +177,8 @@ internal sealed class MainForm : Form
         }
         // DevTools would let a script in the page turn exam mode off or type for the student.
         webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+        // Counts the keys each page received, before the page's own scripts run (PageKeyLedger).
+        await webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(PageKeyLedger.Script);
         webView.CoreWebView2.WebMessageReceived += (_, e) =>
         {
             if (_web is null) return;
@@ -178,6 +186,12 @@ internal sealed class MainForm : Form
             try { json = e.WebMessageAsJson; } catch (ArgumentException) { return; }
             if (ExamMessage.Parse(json, e.Source, _web) is { } exam && !_options.ExamGate)
                 SetExam(exam.On, exam.Accommodation);
+            // Only while the hook runs: outside an exam keys are not compared.
+            else if (_hook is not null && PageKeysMessage.Parse(json, e.Source, _web) is { } count)
+            {
+                _ledger.PageKeys(count);
+                if (_ledger.TakeReport(out var report)) webView.CoreWebView2.PostWebMessageAsJson(report);
+            }
         };
         webView.CoreWebView2.NavigationStarting += (_, e) =>
         {
