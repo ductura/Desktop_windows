@@ -16,7 +16,10 @@ public sealed partial class WebAddress
     /// <summary>Kanonska https adresa s putem koji završava s '/', bez upita i fragmenta.</summary>
     public string Url { get; }
 
-    private WebAddress(string url) => Url = url;
+    /// <summary>Hostovi s popisa paketa (DAN-1547): jedini koji ostaju u ljusci (<see cref="Navigation.Decide"/>).</summary>
+    public IReadOnlyList<string> Hosts { get; }
+
+    private WebAddress(string url, string[] hosts) => (Url, Hosts) = (url, Array.AsReadOnly(hosts));
 
     /// <summary>Adresa iz metapodataka sklopa ili null ako ključ nedostaje ili ne prolazi provjeru.</summary>
     public static WebAddress? FromAssembly(Assembly assembly)
@@ -45,7 +48,7 @@ public sealed partial class WebAddress
         if (url.Contains('?') || url.Contains('#')) return false;
         if (!uri.AbsolutePath.EndsWith('/') || uri.AbsolutePath.Contains("//")) return false;
         if (!allowed.Contains(uri.Host, StringComparer.Ordinal)) return false;
-        web = new WebAddress(url);
+        web = new WebAddress(url, allowed);
         return true;
     }
 
