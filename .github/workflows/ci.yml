@@ -18,7 +18,7 @@ jobs:
       - name: Objava aplikacije
         run: dotnet publish src/Ductura.Desktop -c Release -r win-x64 --self-contained true -o publish
       - name: Inno Setup
-        run: choco install innosetup --version 6.4.3 --no-progress -y
+        run: choco install innosetup --version 6.7.1 --no-progress -y
       - name: Izrada instalacijskog paketa
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DSourceDir=..\publish installer\Ductura.iss'
       - name: Provjera nepotpisanog instalacijskog paketa
