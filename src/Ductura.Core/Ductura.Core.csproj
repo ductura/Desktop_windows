@@ -3,6 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Ductura.Core.Tests" />
     <!-- The health call at start-up (DAN-944-2a) goes through the generated contract client (DAN-958). -->
     <ProjectReference Include="..\Ductura.Contracts\Ductura.Contracts.csproj" />
   </ItemGroup>

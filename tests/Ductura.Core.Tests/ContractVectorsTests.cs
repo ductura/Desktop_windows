@@ -28,7 +28,7 @@ public static class TestFakesRelease
     private static readonly string[] Keys = ["version", "url", "sha256"];
 
     public static string UrlFor(string version) =>
-        $"https://github.com/ductura/server/releases/download/test-fakes-v{version}/ductura-test-fakes-{version}.tgz";
+        $"https://github.com/ductura/Institution_server/releases/download/test-fakes-v{version}/ductura-test-fakes-{version}.tgz";
 
     /// <summary>Exactly the keys version, url and sha256, each once and a string; anything else is an error.</summary>
     public static Lock ParseLock(string json)
@@ -57,8 +57,8 @@ public static class TestFakesRelease
             throw Bad($"sha256 of {locked.Url} is {actual}, the lock expects {locked.Sha256}");
     }
 
-    /// <summary>The health vectors from vectors.json in the tarball; a missing file or no health vector is an error.</summary>
-    public static IReadOnlyDictionary<string, JsonElement> HealthVectors(byte[] tarball)
+    /// <summary>The vector array from the single vectors.json file in the tarball.</summary>
+    public static JsonElement ReadVectors(byte[] tarball)
     {
         using var gzip = new GZipStream(new MemoryStream(tarball), CompressionMode.Decompress);
         using var tar = new TarReader(gzip);
@@ -72,26 +72,33 @@ public static class TestFakesRelease
             vectors = copy.ToArray();
         }
         if (vectors is null) throw Bad($"the tarball has no {VectorsPath}");
+        return JsonSerializer.Deserialize<JsonElement>(vectors);
+    }
+
+    public static IReadOnlyDictionary<string, JsonElement> VectorsForRoute(JsonElement vectors, string route)
+    {
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        foreach (var v in JsonDocument.Parse(vectors).RootElement.EnumerateArray())
+        foreach (var v in vectors.EnumerateArray())
         {
-            if (v.GetProperty("route").GetString() != HealthRoute) continue;
-            if (!result.TryAdd(v.GetProperty("name").GetString()!, v)) throw Bad("duplicate health vector name");
+            if (v.GetProperty("route").GetString() != route) continue;
+            var name = v.GetProperty("name").GetString()!;
+            if (!result.TryAdd(name, v)) throw Bad($"duplicate {route} vector name: {name}");
         }
-        if (result.Count == 0) throw Bad($"no {HealthRoute} vector in {VectorsPath}");
+        if (result.Count == 0) throw Bad($"no {route} vector in {VectorsPath}");
         return result;
     }
 
-    private static readonly Lazy<Task<IReadOnlyDictionary<string, JsonElement>>> Locked = new(async () =>
+    private static readonly Lazy<Task<JsonElement>> Locked = new(async () =>
     {
         var locked = ParseLock(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, LockFile)));
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         var tarball = await http.GetByteArrayAsync(locked.Url);
         Verify(tarball, locked);
-        return HealthVectors(tarball);
+        return ReadVectors(tarball);
     });
 
-    public static Task<IReadOnlyDictionary<string, JsonElement>> LockedHealthVectors() => Locked.Value;
+    public static async Task<IReadOnlyDictionary<string, JsonElement>> LockedVectors(string route) =>
+        VectorsForRoute(await Locked.Value, route);
 
     private static InvalidDataException Bad(string why) => new($"{LockFile}: {why}");
 }
@@ -129,14 +136,14 @@ public class ContractVectorsTests
     [InlineData("03.0.1", null)]
     [InlineData("3.0.1\n", null)]
     [InlineData("3.0.١", null)]
-    [InlineData("3.0.1", "http://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
+    [InlineData("3.0.1", "http://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
     [InlineData("3.0.1", "https://example.test/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.0/ductura-test-fakes-3.0.1.tgz")]
-    [InlineData("3.0.1", " https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\r\n")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\t")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz ")]
-    [InlineData("3.0.1", "https://github.com/ductura/server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\u007f")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.0/ductura-test-fakes-3.0.1.tgz")]
+    [InlineData("3.0.1", " https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\r\n")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\t")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz ")]
+    [InlineData("3.0.1", "https://github.com/ductura/Institution_server/releases/download/test-fakes-v3.0.1/ductura-test-fakes-3.0.1.tgz\u007f")]
     public void Neispravna_verzija_ili_adresa_pada(string version, string? url) =>
         Assert.Throws<InvalidDataException>(() => TestFakesRelease.ParseLock(LockJson(version, url, new string('a', 64))));
 
@@ -160,12 +167,13 @@ public class ContractVectorsTests
 
     [Fact]
     public void Tarball_bez_vektora_pada() =>
-        Assert.Throws<InvalidDataException>(() => TestFakesRelease.HealthVectors(TarGz("package/README.md", "x")));
+        Assert.Throws<InvalidDataException>(() => TestFakesRelease.ReadVectors(TarGz("package/README.md", "x")));
 
     [Fact]
     public void Tarball_bez_health_vektora_pada() =>
-        Assert.Throws<InvalidDataException>(() => TestFakesRelease.HealthVectors(
-            TarGz(TestFakesRelease.VectorsPath, """[{"route":"platform.ready.get","name":"ready"}]""")));
+        Assert.Throws<InvalidDataException>(() => TestFakesRelease.VectorsForRoute(
+            TestFakesRelease.ReadVectors(TarGz(TestFakesRelease.VectorsPath, """[{"route":"platform.ready.get","name":"ready"}]""")),
+            TestFakesRelease.HealthRoute));
 
     // Expected outcome per health vector of the locked release: the reading and the verdict for clients 0.1.0 and 1.0.0.
     public static TheoryData<string, bool, string?, VersionVerdict, VersionVerdict> Expected => new()
@@ -181,7 +189,7 @@ public class ContractVectorsTests
     [Fact]
     public async Task Svaki_health_vektor_izdanja_ima_ocekivani_ishod()
     {
-        var names = (await TestFakesRelease.LockedHealthVectors()).Keys.Order(StringComparer.Ordinal);
+        var names = (await TestFakesRelease.LockedVectors(TestFakesRelease.HealthRoute)).Keys.Order(StringComparer.Ordinal);
         Assert.Equal(Expected.Select(row => (string)row[0]).Order(StringComparer.Ordinal), names);
     }
 
@@ -190,7 +198,7 @@ public class ContractVectorsTests
     public async Task Klijent_daje_ocekivani_ishod_za_health_vektor(
         string name, bool answered, string? min, VersionVerdict at010, VersionVerdict at100)
     {
-        var response = (await TestFakesRelease.LockedHealthVectors())[name].GetProperty("response");
+        var response = (await TestFakesRelease.LockedVectors(TestFakesRelease.HealthRoute))[name].GetProperty("response");
         var handler = new VectorHandler(response);
         var reading = await HealthProbe.ReadAsync(handler, new Uri("https://api.example.test/"), TimeSpan.FromSeconds(5), new FakeTimeProvider(), default);
         Assert.Equal(["GET https://api.example.test/api/v1/health"], handler.Requests);
