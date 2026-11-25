@@ -34,6 +34,20 @@ internal sealed class MainForm : Form
     private readonly string? _smokeOut;
     private readonly LaunchOptions _options;
     private bool _reported;
+    private readonly KeyOriginTally? _keys;
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (_keys is not null) RawKeyboard.Register(Handle);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (_keys is not null && m.Msg == RawKeyboard.WmInput && RawKeyboard.Read(m.LParam) is { } key)
+            _keys.Record(key.Device, key.Released);
+        base.WndProc(ref m);
+    }
 
     public int ExitCode { get; private set; }
 
@@ -43,6 +57,12 @@ internal sealed class MainForm : Form
         Width = 960; Height = 640;
         _options = options;
         _smokeOut = options.ShellSmokeOutput;
+        if (options.KeyTallyOutput is { } tallyPath)
+        {
+            // P-3 red-team (PROPOSAL): two counts, written on close; nothing is kept in normal use.
+            _keys = new KeyOriginTally();
+            FormClosed += (_, _) => File.WriteAllText(tallyPath, _keys.ToJson());
+        }
         // Fail closed: never open an address that did not pass the check, and create no WebView2 for it.
         var view = Startup.Shell(options, web);
         if (view.WebViewUrl is not { } url)
