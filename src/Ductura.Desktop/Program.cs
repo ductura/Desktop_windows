@@ -33,6 +33,7 @@ internal sealed class MainForm : Form
     private static readonly TimeSpan SmokeLimit = TimeSpan.FromSeconds(90);
     private readonly string? _smokeOut;
     private readonly LaunchOptions _options;
+    private readonly IReadOnlyList<string> _hosts;
     private bool _reported;
 
     public int ExitCode { get; private set; }
@@ -42,6 +43,7 @@ internal sealed class MainForm : Form
         Text = Packaging.ProductName;
         Width = 960; Height = 640;
         _options = options;
+        _hosts = web?.Hosts ?? [];
         _smokeOut = options.ShellSmokeOutput;
         // Fail closed: never open an address that did not pass the check, and create no WebView2 for it.
         var view = Startup.Shell(options, web);
@@ -83,13 +85,48 @@ internal sealed class MainForm : Form
             Fail(webView, Startup.WebViewFailedText, ShellOutcome.Failed);
             return;
         }
-        webView.CoreWebView2.NavigationStarting += (_, e) =>
+        // DAN-1547: every navigation of the view goes through Navigation.Handle; only Load is ever loaded.
+        var core = webView.CoreWebView2;
+        core.NavigationStarting += (_, e) =>
         {
-            // The smoke test proves which address WebView2 opens, without contacting the server.
-            if (_smokeOut is not null) e.Cancel = true;
-            Report(ShellOutcome.WebView, e.Uri);
+            var action = Navigation.Handle(NavigationKind.MainFrame, e.Uri, _hosts, e.IsUserInitiated);
+            if (action != NavigationAction.Load) e.Cancel = true;
+            if (_smokeOut is not null)
+            {
+                // The smoke test proves which address WebView2 opens, without contacting the server;
+                // a refused address is never reported as opened.
+                e.Cancel = true;
+                if (action == NavigationAction.Load) Report(ShellOutcome.WebView, e.Uri);
+                return;
+            }
+            if (action == NavigationAction.OpenInBrowser) OpenInBrowser(e.Uri);
         };
-        webView.CoreWebView2.Navigate(url);
+        core.FrameNavigationStarting += (_, e) =>
+        {
+            if (Navigation.Handle(NavigationKind.Frame, e.Uri, _hosts, e.IsUserInitiated) != NavigationAction.Load)
+                e.Cancel = true;
+        };
+        core.NewWindowRequested += (_, e) =>
+        {
+            // Never a second WebView2 window: it would have none of these handlers.
+            e.Handled = true;
+            switch (Navigation.Handle(NavigationKind.NewWindow, e.Uri, _hosts, e.IsUserInitiated))
+            {
+                // Same view; NavigationStarting decides again.
+                case NavigationAction.Load: core.Navigate(e.Uri); break;
+                case NavigationAction.OpenInBrowser when _smokeOut is null: OpenInBrowser(e.Uri); break;
+            }
+        };
+        // Other programs (mailto:, ductura:, ...) are never started from the page.
+        core.LaunchingExternalUriScheme += (_, e) => e.Cancel = true;
+        core.Navigate(url);
+    }
+
+    // Only for an address Navigation.Handle sent to the browser: https, printable ASCII, no space or '\'.
+    private static void OpenInBrowser(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     private void Fail(WebView2 webView, string text, ShellOutcome outcome)

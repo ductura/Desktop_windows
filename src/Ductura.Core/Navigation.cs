@@ -11,6 +11,28 @@ public enum NavigationDecision
     Browser,
 }
 
+/// <summary>Odakle dolazi navigacija koju rukovatelj web prikaza dobiva (DAN-1547).</summary>
+public enum NavigationKind
+{
+    /// <summary>Glavni okvir: <c>NavigationStarting</c>, i za preusmjeravanje.</summary>
+    MainFrame,
+    /// <summary>Okvir unutar stranice: <c>FrameNavigationStarting</c>.</summary>
+    Frame,
+    /// <summary><c>window.open</c> ili <c>target=_blank</c>: <c>NewWindowRequested</c>.</summary>
+    NewWindow,
+}
+
+/// <summary>Što rukovatelj u Program.cs radi s navigacijom (DAN-1547).</summary>
+public enum NavigationAction
+{
+    /// <summary>Otkaži; ništa se ne učitava ni ne otvara.</summary>
+    Refuse,
+    /// <summary>Učitaj u prikazu (novi prozor: u istom prikazu, nikad novi prozor WebView2).</summary>
+    Load,
+    /// <summary>Otkaži u prikazu i otvori u zadanom pregledniku.</summary>
+    OpenInBrowser,
+}
+
 /// <summary>
 /// Odluka o svakoj navigaciji ljuske (DAN-960). Čista funkcija: ne čita okruženje i ne baca iznimke.
 /// </summary>
@@ -40,4 +62,20 @@ public static class Navigation
             ? NavigationDecision.Shell
             : NavigationDecision.Browser;
     }
+
+    /// <summary>
+    /// Radnja rukovatelja web prikaza (DAN-1547), uvijek preko <see cref="Decide"/>: <see cref="NavigationAction.Load"/>
+    /// samo za <see cref="NavigationDecision.Shell"/>. Drugi https host ide u preglednik samo iz glavnog okvira ili
+    /// novog prozora i samo kad je navigaciju pokrenuo korisnik; okvir nikad ne otvara preglednik. Sve ostalo je
+    /// <see cref="NavigationAction.Refuse"/>, i nepoznata vrsta.
+    /// </summary>
+    public static NavigationAction Handle(NavigationKind kind, string? url, IReadOnlyCollection<string>? shellHosts,
+        bool userInitiated) => Decide(url, shellHosts) switch
+    {
+        NavigationDecision.Shell when kind is (NavigationKind.MainFrame or NavigationKind.Frame or NavigationKind.NewWindow)
+            => NavigationAction.Load,
+        NavigationDecision.Browser when userInitiated && kind is (NavigationKind.MainFrame or NavigationKind.NewWindow)
+            => NavigationAction.OpenInBrowser,
+        _ => NavigationAction.Refuse,
+    };
 }
