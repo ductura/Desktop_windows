@@ -1,4 +1,4 @@
-# Ductura / desktop-windows
+# ductura/Desktop_windows
 
 Windows aplikacija i instalacijski paket. Tehnologija: C# / .NET 8, WinForms prozor s WebView2 (spike D-0.1, DAN-956; ovisi o odluci 8, otvoreno), paket preko Inno Setupa.
 
@@ -13,10 +13,10 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 
 | Mapa | Sadržaj |
 |---|---|
-| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`, ponuda novije verzije `UpdateOffer.Decide`) |
+| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`, ponuda novije verzije `UpdateOffer.Decide`, nativni HTTP transport `TokenHeaderHandler`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
-| `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit), ugovornih vektora `health` (DAN-997) i vektora ID-a rada (DAN-1000) |
+| `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit), ugovornih vektora `health` (DAN-997) i vektora ID-a rada (DAN-1000), vektora `downloads.manifest.get` (`ManifestVectorsTests`) i transporta `TokenHeaderHandler` |
 | `tests/functional` | Funkcionalni test instalacije |
 | `scripts/contract-client.mjs` | Generiranje i provjera ugovornog klijenta (`generate`, `check`) |
 | `scripts/ci-ok.test.mjs` | Test obvezne zbirne provjere `ci-ok` u `.github/workflows/ci.yml` (`npm ci` pa `node --test`, u CI-ju na Linuxu). `package.json` i `package-lock.json` služe samo Node skriptama CI-ja (YAML parser `yaml`); aplikacija ne koristi Node. |
@@ -45,28 +45,36 @@ Prozor s provjerenom adresom stvara kontrolu WebView2 i otvara adresu iz `WebAdd
 | Paket | `Microsoft.Web.WebView2` 1.0.3912.50 dodaje oko 0,9 MB nekomprimiranih datoteka: `Microsoft.Web.WebView2.Core.dll` 650 KB, `WebView2Loader.dll` (win-x64) 159 KB, `Microsoft.Web.WebView2.WinForms.dll` 39 KB i `Microsoft.Web.WebView2.Wpf.dll` 83 KB. Izmjereno u CI-ju (artefakt `Ductura-Setup-x64`, 17. 11. 2026.): 50 873 818 B s WebView2 prema 50 535 114 B na `main`, dakle oko 0,33 MB više. Najveći dio paketa i dalje je samostalni .NET 8. |
 | Runtime | Paket ne nosi WebView2 runtime (Evergreen). Windows 11 ga ima ugrađenog, a Windows 10 obično preko Microsoft Edgea. Ako runtime nedostaje, prozor prikazuje „Za prikaz Ducture treba Microsoft Edge WebView2 Runtime.” Aplikacija runtime ne preuzima i ne instalira. To ponašanje CI ne može pokazati jer `windows-latest` ima runtime; dokazano je samo jediničnim testom. |
 | Podaci | WebView2 sprema podatke u `%LOCALAPPDATA%\Ductura\WebView2`, jer instalacija u Program Files nije zapisiva. Način `--shell-smoke-out` koristi zasebnu mapu `%TEMP%\Ductura-shell-smoke\WebView2`, pa funkcionalni test ne dira korisnikov profil. |
-| Navigacija | Još nema pravila za navigaciju unutar prozora (DAN-960). |
+| Navigacija | Pravilo `Navigation.Decide` (DAN-960) postoji u `Ductura.Core`, ali još nije spojeno na `NavigationStarting` u `Program.cs`; prozor zasad ne odlučuje o navigaciji (DAN-960). |
 
 Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapiše `Ductura WebView2 <adresa>` (kod 0) kad WebView2 počne otvarati adresu, `Ductura poruka` (kod 1) kad adresa nije ispravna `Ductura bez WebView2` (kod 3) kad nema runtimea i `Ductura greška WebView2` (kod 4) kad se WebView2 ne pokrene iz drugog razloga. Ako u 90 sekundi nema ishoda, izlazi s kodom 2. U tom načinu navigacija se zaustavlja čim počne, pa test ne ovisi o mreži ni o serveru. Kod neispravne adrese test provjerava i da podatkovna mapa WebView2 nije nastala.
 
 ## Ugovorni klijent (DAN-958)
 
-`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/servera slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Koristi ga `HealthProbe.ReadAsync` u `Ductura.Core` (DAN-944-2a): zahtjev gradi generirani klijent, a tijelo provjerava `HealthProbe`, jer generirani model krivi tip polja pretvara u null. Prozor ga još ne poziva (944-2b). Paketi klijenta (Kiota) time ulaze i u instalacijski paket. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md#katalog-zadataka) §0).
+`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/Institution_server slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Koristi ga `HealthProbe.ReadAsync` u `Ductura.Core` (DAN-944-2a): zahtjev gradi generirani klijent, a tijelo provjerava `HealthProbe`, jer generirani model krivi tip polja pretvara u null. Prozor ga još ne poziva (944-2b). Paketi klijenta (Kiota) time ulaze i u instalacijski paket. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md#katalog-zadataka) §0).
 
 - Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu (na Windowsu skripta odbija rad, jer uspoređuje bajtove) i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
 - CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak dokazuje da `check` pada kad se izmijeni generirana datoteka i kad se izmijeni opis polja `health` u OpenAPI-ju. Posao preuzima tarball s github.com, pa ispad GitHuba ruši `ci-ok`.
 
 ## Ugovorni vektori `health` (DAN-997)
 
-`tests/Ductura.Core.Tests/ContractVectorsTests.cs` provjerava klijent prema `health` vektorima lažnog servera iz izdanja `@ductura/test-fakes` zapisanog u `src/Ductura.Contracts/test-fakes.lock.json` (verzija, URL, sha256; URL mora biti točno onaj na GitHub Releases ductura/servera koji slijedi iz verzije). Test preuzme tarball bez tokena, pada ako se sha256 ne slaže s lockom, i svaki vektor rute `platform.health.get` šalje kroz `HealthProbe.ReadAsync` i `ClientVersion.Decide`. Očekivani ishodi su tablica u testu; vektor koji se pojavi ili nestane iz izdanja ruši test. Test traži mrežu, i lokalno i u poslu `build-test`, pa ispad github.com ruši `ci-ok`. Nova verzija test-fakes: promijeni sve tri vrijednosti u locku i po potrebi tablicu.
+`tests/Ductura.Core.Tests/ContractVectorsTests.cs` provjerava klijent prema `health` vektorima lažnog servera iz izdanja `@ductura/test-fakes` zapisanog u `src/Ductura.Contracts/test-fakes.lock.json` (verzija, URL, sha256; URL mora biti točno onaj na GitHub Releases ductura/Institution_server koji slijedi iz verzije). Test preuzme tarball bez tokena, pada ako se sha256 ne slaže s lockom, i svaki vektor rute `platform.health.get` šalje kroz `HealthProbe.ReadAsync` i `ClientVersion.Decide`. Očekivani ishodi su tablica u testu; vektor koji se pojavi ili nestane iz izdanja ruši test. Test traži mrežu, i lokalno i u poslu `build-test`, pa ispad github.com ruši `ci-ok`. Nova verzija test-fakes: promijeni sve tri vrijednosti u locku i po potrebi tablicu.
 
 ## Vektori ID-a rada (DAN-1000)
 
 `tests/Ductura.Core.Tests/WorkIdVectorsTests.cs` čita `vectors/work-id.json` iz izdanja `@ductura/contracts` zapisanog u `src/Ductura.Contracts/contract-lock.json` (isti tarball i sha256 kao ugovorni klijent; vektori postoje od 2.5.0). Datoteku čita strogo: višak, manjak ili krivi tip ključa ruši test. Svaki vektor ide kroz `LaunchOptions.Parse` kao poveznica `ductura://doc/<segment>`: `workIdFromPath` doslovno, a `isWorkId` s `%` i `/` kodiranima, pa parser dobiva natrag isti ID. Ulaz koji nije string mora biti odbijen, jer je argument pokretanja uvijek string. Test pada kad se promijeni presuda ili `id` vektora, kad vektor nestane, pridođe ili promijeni ime (broj i sha256 imena su u testu). Vektor `workIdFromPath` koji završava s `/` dao bi drukčiji ishod (ljuska skida jedan `/`); takav vektor je nalaz, ne promjena testa. Ručni slučajevi u `WorkIdTests.cs` ostaju jer nisu svi u vektorima. Test traži mrežu, kao DAN-997.
 
+## Vektori `downloads.manifest.get`
+
+`tests/Ductura.Core.Tests/ManifestVectorsTests.cs` šalje vektore rute `downloads.manifest.get` iz izdanja `@ductura/test-fakes` (`test-fakes.lock.json`, trenutačno 3.1.1) kroz `UpdateOffer.Decide` za `x64` i `arm64`. Očekivane ponude su tablica u testu (`ready`, `ready-empty`, `unavailable`); vektor koji se pojavi ili nestane iz izdanja ruši test. Test traži mrežu, kao DAN-997.
+
+## Nativni transport `TokenHeaderHandler`
+
+`TokenHeaderHandler` u `Ductura.Core` je `DelegatingHandler` za nativne pozive (ADR S-1E-e). Bearer token dodaje samo zahtjevu na `/api/v1/` istog podrijetla kao `WebAddress` (shema, host i port; bez korisnika u adresi i bez ručno postavljenog `Host`). Token daje pozivatelj preko `Func<string?>`; prazan, predug (više od 4096 znakova) ili izvan znakova token68 ne šalje se. Svako postojeće zaglavlje `Authorization` i `Cookie` se uklanja, a unutarnji transport mora isključiti kolačiće i automatska preusmjeravanja (inače konstruktor baca). Još nije spojen na prozor u `Program.cs`. Testovi: `TokenHeaderHandlerTests.cs`.
+
 ## Ponuda novije verzije (DAN-1072)
 
-`UpdateOffer.Decide` u `Ductura.Core` iz odgovora `downloads.manifest.get` (S-1H.5) bira redak `windows` za `x64` ili `arm64` i nudi ga (verzija, adresa doslovno, sha256) samo kad je novija od instalirane. Status različit od 200, tijelo izvan ugovora (i u retku za macOS) i instalirana verzija koja nije strogi `major.minor.patch` ne nude ništa; dupli ključ i dupli par sustav/arhitektura su stroži od sheme. Provjerava oblik, nije sigurnosna kontrola: mreža, preuzimanje, provjera bajtova paketa i prikaz su kasniji koraci, a vektori rute iz `@ductura/test-fakes` su 1072-2. Testovi: `UpdateOfferTests.cs`, nad sintetičkim manifestom iz `openapi/v1.json` ductura/servera na `6f7a594`. Otvoreno: manifest navodi `.msi`, a paket je `Ductura-Setup-x64.exe` (odluka 12, DAN-932).
+`UpdateOffer.Decide` u `Ductura.Core` iz odgovora `downloads.manifest.get` (S-1H.5) bira redak `windows` za `x64` ili `arm64` i nudi ga (verzija, adresa doslovno, sha256) samo kad je novija od instalirane. Status različit od 200, tijelo izvan ugovora (i u retku za macOS) i instalirana verzija koja nije strogi `major.minor.patch` ne nude ništa; dupli ključ i dupli par sustav/arhitektura su stroži od sheme. Provjerava oblik, nije sigurnosna kontrola: mreža, preuzimanje, provjera bajtova paketa i prikaz su kasniji koraci, a vektori rute iz `@ductura/test-fakes` su 1072-2. Testovi: `UpdateOfferTests.cs`, nad sintetičkim manifestom iz `openapi/v1.json` ductura/Institution_server na `6f7a594`. Otvoreno: manifest navodi `.msi`, a paket je `Ductura-Setup-x64.exe` (odluka 12, DAN-932).
 
 ## Provjera verzije pri pokretanju (DAN-944)
 
