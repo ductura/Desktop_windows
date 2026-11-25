@@ -33,6 +33,8 @@ internal sealed class MainForm : Form
     private static readonly TimeSpan SmokeLimit = TimeSpan.FromSeconds(90);
     private readonly string? _smokeOut;
     private readonly LaunchOptions _options;
+    private readonly WebAddress? _web;
+    private readonly CancellationTokenSource _closing = new();
     private readonly IReadOnlyList<string> _hosts;
     private bool _reported;
 
@@ -43,6 +45,8 @@ internal sealed class MainForm : Form
         Text = Packaging.ProductName;
         Width = 960; Height = 640;
         _options = options;
+        _web = web;
+        FormClosed += (_, _) => _closing.Cancel();
         _hosts = web?.Hosts ?? [];
         _smokeOut = options.ShellSmokeOutput;
         // Fail closed: never open an address that did not pass the check, and create no WebView2 for it.
@@ -67,6 +71,30 @@ internal sealed class MainForm : Form
 
     private async Task StartWebView(WebView2 webView, string url)
     {
+        // DAN-1548: health call at start-up through TokenHeaderHandler. The shell smoke test never contacts the
+        // server, so it skips it. No sign-in exists yet, so there is no token and no Authorization header is sent.
+        if (_smokeOut is null && _web is not null)
+        {
+            VersionVerdict verdict;
+            try
+            {
+                var version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+                verdict = await StartupHealth.CheckAsync(_web, version, () => null, TimeProvider.System, _closing.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return; // window closed while waiting
+            }
+            var view = StartupHealth.Decide(verdict, url);
+            if (view.WebViewUrl is null)
+            {
+                Controls.Remove(webView);
+                webView.Dispose();
+                ShowMessage(view.Message!);
+                return;
+            }
+            if (view.Notice is { } notice) ShowMessage(notice);
+        }
         try
         {
             var data = Startup.WebViewDataFolder(_options,

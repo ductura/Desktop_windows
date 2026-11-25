@@ -47,7 +47,7 @@ public static class Startup
     };
 }
 
-/// <summary>Točno jedno od dvoga: adresa za WebView2 ili poruka.</summary>
-public sealed record ShellView(string? WebViewUrl, string? Message);
+/// <summary>Točno jedno od dvoga: adresa za WebView2 ili poruka; <c>Notice</c> je obavijest uz otvoreni web (DAN-1548).</summary>
+public sealed record ShellView(string? WebViewUrl, string? Message, string? Notice = null);
 
 public enum ShellOutcome { WebView, Message, NoRuntime, Failed }
