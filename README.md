@@ -13,7 +13,7 @@ Pokriva je `tests/functional/Install-And-Launch.ps1`: tiha instalacija, provjera
 
 | Mapa | Sadržaj |
 |---|---|
-| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`, ponuda novije verzije `UpdateOffer.Decide`, nativni HTTP transport `TokenHeaderHandler`) |
+| `src/Ductura.Core` | Pomoćne funkcije (argumenti, nazivi paketa, prečac, verzije, adresa weba, odluka o navigaciji ljuske `Navigation.Decide`, provjera verzije `ClientVersion.Decide`, poziv `health` pri pokretanju `HealthProbe.ReadAsync`, spoj poziva i transporta `StartupHealth`, ponuda novije verzije `UpdateOffer.Decide`, nativni HTTP transport `TokenHeaderHandler`) |
 | `src/Ductura.Desktop` | Windows aplikacija (`Ductura.exe`) |
 | `src/Ductura.Contracts` | Ugovorni klijent generiran iz OpenAPI-ja servera (DAN-958); vidi „Ugovorni klijent” |
 | `tests/Ductura.Core.Tests` | Testovi pomoćnih funkcija (xUnit), ugovornih vektora `health` (DAN-997) i vektora ID-a rada (DAN-1000), vektora `downloads.manifest.get` (`ManifestVectorsTests`) i transporta `TokenHeaderHandler` |
@@ -51,7 +51,7 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 ## Ugovorni klijent (DAN-958)
 
-`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/Institution_server slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Koristi ga `HealthProbe.ReadAsync` u `Ductura.Core` (DAN-944-2a): zahtjev gradi generirani klijent, a tijelo provjerava `HealthProbe`, jer generirani model krivi tip polja pretvara u null. Prozor ga još ne poziva (944-2b). Paketi klijenta (Kiota) time ulaze i u instalacijski paket. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md#katalog-zadataka) §0).
+`src/Ductura.Contracts` je C# klijent koji Kiota (verzija u `.config/dotnet-tools.json`) generira iz `openapi/v1.json` zaključanog izdanja `@ductura/contracts`. Izdanje je zapisano u `src/Ductura.Contracts/contract-lock.json`: samo verzija i sha256 tarballa; URL na GitHub Releases ductura/Institution_server slijedi iz verzije. Paketi za izvođenje (`Microsoft.Kiota.Bundle`) zaključani su u `packages.lock.json`. Generira se samo `/api/v1/health` (`platform.health.get`, u C#-u `client.Api.V1.Health.GetAsync()`). Koristi ga `HealthProbe.ReadAsync` u `Ductura.Core` (DAN-944-2a): zahtjev gradi generirani klijent, a tijelo provjerava `HealthProbe`, jer generirani model krivi tip polja pretvara u null. Prozor ga poziva pri pokretanju (DAN-1548, vidi „Provjera verzije pri pokretanju”). Paketi klijenta (Kiota) time ulaze i u instalacijski paket. Jezik C# je zatečeno stanje kostura; odluka 8 je otvorena ([docs/PLAN.md](https://github.com/ductura/.github/blob/main/docs/plan/PLAN-MIGRACIJE.md#katalog-zadataka) §0).
 
 - Nova verzija ugovora: promijeni verziju i sha256 u `contract-lock.json` (sha256 je u bilješci izdanja), pokreni `dotnet tool restore` i `node scripts/contract-client.mjs generate` na Linuxu (na Windowsu skripta odbija rad, jer uspoređuje bajtove) i predaj promjene u `Generated/`. Datoteke u `Generated/` se ne uređuju ručno.
 - CI posao `contract-client` pokreće `node scripts/contract-client.mjs check`: preuzme tarball, provjeri sha256, ponovno generira klijent u privremenu mapu i pada kad se ijedna datoteka razlikuje, nedostaje ili je višak. Zadnji korak dokazuje da `check` pada kad se izmijeni generirana datoteka i kad se izmijeni opis polja `health` u OpenAPI-ju. Posao preuzima tarball s github.com, pa ispad GitHuba ruši `ci-ok`.
@@ -70,7 +70,7 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 ## Nativni transport `TokenHeaderHandler`
 
-`TokenHeaderHandler` u `Ductura.Core` je `DelegatingHandler` za nativne pozive (ADR S-1E-e). Bearer token dodaje samo zahtjevu na `/api/v1/` istog podrijetla kao `WebAddress` (shema, host i port; bez korisnika u adresi i bez ručno postavljenog `Host`). Token daje pozivatelj preko `Func<string?>`; prazan, predug (više od 4096 znakova) ili izvan znakova token68 ne šalje se. Svako postojeće zaglavlje `Authorization` i `Cookie` se uklanja, a unutarnji transport mora isključiti kolačiće i automatska preusmjeravanja (inače konstruktor baca). Još nije spojen na prozor u `Program.cs`. Testovi: `TokenHeaderHandlerTests.cs`.
+`TokenHeaderHandler` u `Ductura.Core` je `DelegatingHandler` za nativne pozive (ADR S-1E-e). Bearer token dodaje samo zahtjevu na `/api/v1/` istog podrijetla kao `WebAddress` (shema, host i port; bez korisnika u adresi i bez ručno postavljenog `Host`). Token daje pozivatelj preko `Func<string?>`; prazan, predug (više od 4096 znakova) ili izvan znakova token68 ne šalje se. Svako postojeće zaglavlje `Authorization` i `Cookie` se uklanja, a unutarnji transport mora isključiti kolačiće i automatska preusmjeravanja (inače konstruktor baca). Spojen je na prozor kroz `StartupHealth` (DAN-1548): poziv `health` pri pokretanju ide kroz njega. Prijave u aplikaciji još nema, pa je izvor tokena `() => null` i zaglavlje `Authorization` se ne šalje; kad prijava postoji, zamjenjuje se samo taj izvor u `Program.cs`. Testovi: `TokenHeaderHandlerTests.cs`, `StartupHealthTests.cs`.
 
 ## Ponuda novije verzije (DAN-1072)
 
@@ -78,12 +78,12 @@ Funkcionalni test pokreće prozor s `--shell-smoke-out <datoteka>`. Prozor zapi�
 
 ## Provjera verzije pri pokretanju (DAN-944)
 
-`ClientVersion.Decide` u `Ductura.Core` uspoređuje `minClientVersion` iz `health` sa svojom verzijom. Poziv `health` je `HealthProbe.ReadAsync` kroz ugovorni klijent (DAN-944-2a, vidi „Ugovorni klijent”); spajanje u prozor još nije napravljeno (944-2b). Paket je sada 0.1.0, a server šalje `minClientVersion` 1.0.0, pa spajanje čeka odluku o verziji (pitanje za vlasnika).
+`ClientVersion.Decide` u `Ductura.Core` uspoređuje `minClientVersion` iz `health` sa svojom verzijom. Poziv `health` je `HealthProbe.ReadAsync` kroz ugovorni klijent (DAN-944-2a, vidi „Ugovorni klijent”); pri pokretanju ga u prozoru poziva `StartupHealth.CheckAsync` (DAN-1548): `HealthProbe` šalje `GET /api/v1/health` na podrijetlo weba (bez puta `/app/`) kroz `TokenHeaderHandler`, rok je 5 s, a ishod određuje `ClientVersion.Decide`. Poziv se ne radi u načinu `--shell-smoke-out` (taj test ne ovisi o serveru). Otvoreno za vlasnika: paket je 0.1.0, a server šalje `minClientVersion` 1.0.0, pa bi instalirani paket dok se verzija ne uskladi pokazao samo poruku „više nije podržana”; odluka o verziji paketa nije dio ovog zadatka.
 
 | Ishod | Kada | Web |
 |---|---|---|
 | `UpdateRequired` | klijent je stariji od `minClientVersion`, ili vlastita verzija nije strogi `major.minor.patch` | ne otvara se; poruka „Ova verzija Ducture više nije podržana. Preuzmite i instalirajte noviju verziju.” |
-| `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se: web i preloader (D-300) prikazuju stanje servera; `minClientVersion` je savjet za nadogradnju, ne sigurnosna granica |
+| `ServerUnavailable` | server nije odgovorio (mreža, rok, ne-200, tijelo izvan ugovora) ili `minClientVersion` nije u obliku iz ugovora | otvara se, uz obavijest „Poslužitelj Ducture trenutačno ne odgovara. Prikaz se otvara, ali neke stvari možda neće raditi.”: web i preloader (D-300) prikazuju stanje servera; `minClientVersion` je savjet za nadogradnju, ne sigurnosna granica |
 | `Current` | klijent je jednak ili noviji, ili odgovor nema `minClientVersion` | otvara se |
 
 ## Pokretanje
