@@ -1,0 +1,20 @@
+# DAN-1549: weekly updates for the pinned GitHub Actions (full SHA + version
+# comment, bumped as a pair by Dependabot) and for NuGet packages.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+  - package-ecosystem: nuget
+    directories:
+      - /src/Ductura.Contracts
+      - /src/Ductura.Core
+      - /src/Ductura.Desktop
+      - /tests/Ductura.Core.Tests
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
